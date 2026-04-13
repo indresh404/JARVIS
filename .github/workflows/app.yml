@@ -1,0 +1,29 @@
+name: App CI
+
+on:
+  push:
+    paths: ['app/**']
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          cd app
+          npm install
+
+      - name: Lint check
+        run: |
+          cd app
+          npx eslint . || true

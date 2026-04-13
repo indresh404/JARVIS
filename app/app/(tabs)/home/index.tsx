@@ -3,22 +3,21 @@ import { BodyMapVisualization3D } from '@/components/bodymap/BodyMapVisualizatio
 import { BodyMapCard } from '@/components/home/BodyMapCard';
 import { GovernmentSchemeCard } from '@/components/home/GovernmentSchemeCard';
 import { ScreenIntroGate } from '@/components/ui/ScreenIntroGate';
-import { SkeletonHomeScreen } from '@/components/ui/SkeletonLoader';
+import React from 'react';
+import { 
+  ScrollView, 
+  StyleSheet, 
+  Text, 
+  View, 
+  TouchableOpacity, 
+  SafeAreaView, 
+  StatusBar,
+  Platform,
+  Alert
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useSegments } from 'expo-router';
-import React, { useState } from 'react';
-import {
-  Alert,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
-} from 'react-native';
+import { useSegments, router } from 'expo-router';
 
 // Top Navigation Bar Component (inline)
 const TopNavBar = ({ 
@@ -107,21 +106,20 @@ const AIChatButton = () => {
   };
 
   return (
-    <View style={styles.aiChatButton}>
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={handlePress}
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={handlePress}
+      style={styles.aiChatButton}
+    >
+      <LinearGradient
+        colors={['#0474FC', '#0360D0']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.aiChatGradient}
       >
-        <LinearGradient
-          colors={['#0474FC', '#0360D0']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.aiChatGradient}
-        >
-          <Ionicons name="chatbubble-ellipses" size={28} color="#FFFFFF" />
-        </LinearGradient>
-      </TouchableOpacity>
-    </View>
+        <Ionicons name="chatbubble-ellipses" size={28} color="#FFFFFF" />
+      </LinearGradient>
+    </TouchableOpacity>
   );
 };
 
@@ -241,63 +239,8 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-  },
-  welcomeSection: {
-    marginBottom: 24,
-  },
-  welcomeHeader: {
-    flexDirection: 'row',
+    padding: 20,
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
-  },
-  shieldIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: 'rgba(4, 116, 252, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  welcomeSubtitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#0474FC',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  welcomeTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  welcomeDescription: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-  contentSection: {
-    marginTop: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  placeholderText: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    fontWeight: '500',
   },
   welcomeText: {
     fontSize: 18,
@@ -315,9 +258,6 @@ const styles = StyleSheet.create({
   },
   // AI Chat Button Styles
   aiChatButton: {
-    position: 'absolute',
-    bottom: 32,
-    right: 20,
     marginVertical: 20,
     shadowColor: '#0474FC',
     shadowOffset: { width: 0, height: 4 },

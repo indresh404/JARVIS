@@ -76,30 +76,32 @@ export default function TabLayout() {
   const handleTabPress = (route: string, index: number) => {
     // Smooth ripple effect on press
     Animated.parallel([
-      Animated.timing(tabScaleAnims[index], {
+      Animated.timing(tabScaleAnimations[index], {
         toValue: 0.92,
         duration: 100,
         useNativeDriver: true,
+        easing: Easing.inOut(Easing.ease),
       }),
-      Animated.timing(tabTextAnims[index], {
+      Animated.timing(tabGlowAnimations[index], {
         toValue: 0.8,
         duration: 100,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }),
     ]).start();
 
     // Smooth return
     setTimeout(() => {
       Animated.parallel([
-        Animated.timing(tabScaleAnims[index], {
+        Animated.timing(tabScaleAnimations[index], {
           toValue: 1,
           duration: 200,
           useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
         }),
-        Animated.timing(tabTextAnims[index], {
+        Animated.timing(tabGlowAnimations[index], {
           toValue: 0,
           duration: 300,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ]).start();
     }, 100);
@@ -161,7 +163,7 @@ export default function TabLayout() {
                       {
                         shadowColor: PRIMARY_COLOR,
                         shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.3,
+                        shadowOpacity: glowIntensity,
                         shadowRadius: 10,
                       }
                     ]}>
@@ -177,7 +179,7 @@ export default function TabLayout() {
                       { transform: [{ scale: getTextScale(idx) }] }
                     ]}>
                       {tab.name}
-                    </Animated.Text>
+                    </Text>
                   </TouchableOpacity>
                 </Animated.View>
               );
@@ -206,7 +208,7 @@ export default function TabLayout() {
                       {
                         shadowColor: PRIMARY_COLOR,
                         shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.3,
+                        shadowOpacity: glowIntensity,
                         shadowRadius: 10,
                       }
                     ]}>
@@ -222,7 +224,7 @@ export default function TabLayout() {
                       { transform: [{ scale: getTextScale(tabIndex) }] }
                     ]}>
                       {tab.name}
-                    </Animated.Text>
+                    </Text>
                   </TouchableOpacity>
                 </Animated.View>
               );

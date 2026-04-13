@@ -1,19 +1,24 @@
 // app/(tabs)/home/index.tsx
+import { BodyMapVisualization3D } from '@/components/bodymap/BodyMapVisualization3D';
+import { BodyMapCard } from '@/components/home/BodyMapCard';
+import { GovernmentSchemeCard } from '@/components/home/GovernmentSchemeCard';
 import { ScreenIntroGate } from '@/components/ui/ScreenIntroGate';
-import React from 'react';
-import { 
-  ScrollView, 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  SafeAreaView, 
-  StatusBar,
-  Platform 
-} from 'react-native';
+import { SkeletonHomeScreen } from '@/components/ui/SkeletonLoader';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSegments } from 'expo-router';
+import { router, useSegments } from 'expo-router';
+import React, { useState } from 'react';
+import {
+  Alert,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 // Top Navigation Bar Component (inline)
 const TopNavBar = ({ 
@@ -21,7 +26,7 @@ const TopNavBar = ({
   onNotificationPress, 
   onProfilePress, 
   notificationCount = 3, 
-  userName = 'Rahul',
+  userName = 'Indresh',
   activeScreen = 'DASHBOARD'
 }: any) => {
   // Get the title based on active screen
@@ -89,9 +94,67 @@ const TopNavBar = ({
   );
 };
 
+// AI Chat Button Component
+const AIChatButton = () => {
+  const handlePress = () => {
+    try {
+      // Navigate to AI Chat screen
+      router.push('/(onboarding)/chat');
+    } catch (error) {
+      Alert.alert('Error', 'Unable to open chat. Please try again.');
+      console.error('Navigation error:', error);
+    }
+  };
+
+  return (
+    <View style={styles.aiChatButton}>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={handlePress}
+      >
+        <LinearGradient
+          colors={['#0474FC', '#0360D0']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.aiChatGradient}
+        >
+          <Ionicons name="chatbubble-ellipses" size={28} color="#FFFFFF" />
+        </LinearGradient>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 export default function HomeScreen() {
   const segments = useSegments();
   const currentRoute = segments[segments.length - 1];
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [bodyMapVisible, setBodyMapVisible] = useState(false);
+
+  // Skeleton loading timeout: 4 seconds fixed duration
+  const SKELETON_DURATION = 4000; // 4 seconds
+  const MAX_SKELETON_TIME = 90000; // 4 minutes max timeout
+  const skeletonStartTime = React.useRef<number>(Date.now());
+
+  const handleIntroComplete = () => {
+    // Start skeleton loading after intro animation
+    skeletonStartTime.current = Date.now();
+    
+    // Hide skeleton after fixed 4 seconds duration
+    const skeletonTimeout = setTimeout(() => {
+      setIsDataLoaded(true);
+    }, SKELETON_DURATION);
+
+    // Safety: force show content after 4 minutes max
+    const maxTimeoutTimer = setTimeout(() => {
+      setIsDataLoaded(true);
+    }, MAX_SKELETON_TIME);
+
+    return () => {
+      clearTimeout(skeletonTimeout);
+      clearTimeout(maxTimeoutTimer);
+    };
+  };
   
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -113,17 +176,54 @@ export default function HomeScreen() {
         introSource={require('../../../assets/lottie_animations/heart_animation.json')}
         introText="Tracking your heartbeat and getting everything ready"
         backgroundColor="#F9FAFB"
+        onIntroComplete={handleIntroComplete}
       >
-        <ScrollView 
-          style={styles.container} 
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.content}>
-            <Text style={styles.welcomeText}>Welcome to Your Health Dashboard</Text>
-            {/* Rest of your existing home screen components */}
-          </View>
-        </ScrollView>
+        {!isDataLoaded ? (
+          <SkeletonHomeScreen />
+        ) : (
+          <>
+            <ScrollView 
+              style={styles.container} 
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.content}>
+                {/* Welcome Section */}
+                <View style={styles.welcomeSection}>
+                  <View style={styles.welcomeHeader}>
+                    <View style={styles.shieldIcon}>
+                      <Ionicons name="shield-checkmark" size={16} color="#0474FC" />
+                    </View>
+                    <Text style={styles.welcomeSubtitle}>CLINICAL HEALTH ID: #SW-9431</Text>
+                  </View>
+                  <Text style={styles.welcomeTitle}>Welcome back, Rahul</Text>
+                  <Text style={styles.welcomeDescription}>Your individualized health intelligence hub is ready</Text>
+                </View>
+
+                {/* Government Scheme Card */}
+                <GovernmentSchemeCard />
+
+                {/* 3D Body Map Card */}
+                <BodyMapCard onPress={() => setBodyMapVisible(true)} />
+
+                {/* Additional Content Areas */}
+                <View style={styles.contentSection}>
+                  <Text style={styles.sectionTitle}>Health Status</Text>
+                  <Text style={styles.placeholderText}>More health components coming soon...</Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Body Map Modal */}
+            <BodyMapVisualization3D 
+              visible={bodyMapVisible} 
+              onClose={() => setBodyMapVisible(false)} 
+            />
+
+            {/* AI Chat Button - Floating */}
+            <AIChatButton />
+          </>
+        )}
       </ScreenIntroGate>
     </SafeAreaView>
   );
@@ -138,10 +238,66 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   content: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  welcomeSection: {
+    marginBottom: 24,
+  },
+  welcomeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  shieldIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: 'rgba(4, 116, 252, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  welcomeSubtitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0474FC',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  welcomeTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  welcomeDescription: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  contentSection: {
+    marginTop: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  placeholderText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
   welcomeText: {
     fontSize: 18,
@@ -149,6 +305,32 @@ const styles = StyleSheet.create({
     color: '#111827',
     textAlign: 'center',
     marginTop: 20,
+    marginBottom: 30,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 15,
+  },
+  // AI Chat Button Styles
+  aiChatButton: {
+    position: 'absolute',
+    bottom: 32,
+    right: 20,
+    marginVertical: 20,
+    shadowColor: '#0474FC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  aiChatGradient: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Top Navigation Bar Styles
   topNavContainer: {

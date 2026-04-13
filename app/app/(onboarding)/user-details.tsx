@@ -101,6 +101,73 @@ export default function UserDetailsScreen() {
     }
   };
 
+  // Validate individual field
+  const validateField = (fieldName: string, value: string | null) => {
+    const newErrors = { ...errors };
+
+    switch (fieldName) {
+      case 'name':
+        if (!value?.trim()) {
+          newErrors.name = 'Name is required';
+        } else if (value.trim().length < 2) {
+          newErrors.name = 'Name must be at least 2 characters';
+        } else if (value.trim().length > 50) {
+          newErrors.name = 'Name must be less than 50 characters';
+        } else {
+          delete newErrors.name;
+        }
+        break;
+
+      case 'age':
+        if (!value?.trim()) {
+          newErrors.age = 'Age is required';
+        } else {
+          const ageNum = parseInt(value);
+          if (isNaN(ageNum)) {
+            newErrors.age = 'Please enter a valid number';
+          } else if (ageNum < 1 || ageNum > 120) {
+            newErrors.age = 'Please enter a valid age (1-120)';
+          } else {
+            delete newErrors.age;
+          }
+        }
+        break;
+
+      case 'phoneNumber':
+        if (!value?.trim()) {
+          newErrors.phoneNumber = 'Phone number is required';
+        } else {
+          const phoneRegex = /^[0-9]{10}$/;
+          if (!phoneRegex.test(value.trim())) {
+            newErrors.phoneNumber = 'Please enter a valid 10-digit phone number';
+          } else {
+            delete newErrors.phoneNumber;
+          }
+        }
+        break;
+
+      case 'gender':
+        if (!value) {
+          newErrors.gender = 'Please select your gender';
+        } else {
+          delete newErrors.gender;
+        }
+        break;
+
+      case 'location':
+        if (!value?.trim()) {
+          newErrors.location = 'Location is required';
+        } else if (value.trim().length < 2) {
+          newErrors.location = 'Please enter a valid location';
+        } else {
+          delete newErrors.location;
+        }
+        break;
+    }
+
+    setErrors(newErrors);
+  };
+
   // Validation function
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
@@ -190,6 +257,7 @@ export default function UserDetailsScreen() {
       !errors.name &&
       !errors.age &&
       !errors.phoneNumber &&
+      !errors.gender &&
       !errors.location;
   };
 
@@ -236,12 +304,14 @@ export default function UserDetailsScreen() {
                   placeholder="Enter your full name"
                   placeholderTextColor={COLORS.text.muted}
                   value={name}
-                  onChangeText={setName}
+                  onChangeText={(text) => {
+                    setName(text);
+                    setTouched({ ...touched, name: true });
+                    validateField('name', text);
+                  }}
                   onFocus={() => setFocusedInput('name')}
                   onBlur={() => {
                     setFocusedInput(null);
-                    setTouched({ ...touched, name: true });
-                    validateForm();
                   }}
                   returnKeyType="next"
                   onSubmitEditing={() => ageInputRef.current?.focus()}
@@ -267,13 +337,15 @@ export default function UserDetailsScreen() {
                   placeholder="Enter your age"
                   placeholderTextColor={COLORS.text.muted}
                   value={age}
-                  onChangeText={setAge}
+                  onChangeText={(text) => {
+                    setAge(text);
+                    setTouched({ ...touched, age: true });
+                    validateField('age', text);
+                  }}
                   keyboardType="number-pad"
                   onFocus={() => setFocusedInput('age')}
                   onBlur={() => {
                     setFocusedInput(null);
-                    setTouched({ ...touched, age: true });
-                    validateForm();
                   }}
                   returnKeyType="next"
                   onSubmitEditing={() => phoneInputRef.current?.focus()}
@@ -299,13 +371,15 @@ export default function UserDetailsScreen() {
                   placeholder="Enter 10-digit mobile number"
                   placeholderTextColor={COLORS.text.muted}
                   value={phoneNumber}
-                  onChangeText={setPhoneNumber}
+                  onChangeText={(text) => {
+                    setPhoneNumber(text);
+                    setTouched({ ...touched, phoneNumber: true });
+                    validateField('phoneNumber', text);
+                  }}
                   keyboardType="phone-pad"
                   onFocus={() => setFocusedInput('phoneNumber')}
                   onBlur={() => {
                     setFocusedInput(null);
-                    setTouched({ ...touched, phoneNumber: true });
-                    validateForm();
                   }}
                   returnKeyType="next"
                   onSubmitEditing={() => locationInputRef.current?.focus()}
@@ -331,10 +405,9 @@ export default function UserDetailsScreen() {
                     ]}
                     onPress={() => {
                       setGender(g);
-                      setTouched({ ...touched, gender: true });
-                      if (errors.gender) {
-                        setErrors({ ...errors, gender: '' });
-                      }
+                      const newTouched = { ...touched, gender: true };
+                      setTouched(newTouched);
+                      validateField('gender', g);
                     }}
                     activeOpacity={0.8}
                   >
@@ -364,15 +437,17 @@ export default function UserDetailsScreen() {
                   <TextInput
                     ref={locationInputRef}
                     style={[styles.textInput, styles.locationInput]}
-                    placeholder="City, State (e.g., Mumbai, Maharashtra)"
+                    placeholder="Location"
                     placeholderTextColor={COLORS.text.muted}
                     value={location}
-                    onChangeText={setLocation}
+                    onChangeText={(text) => {
+                      setLocation(text);
+                      setTouched({ ...touched, location: true });
+                      validateField('location', text);
+                    }}
                     onFocus={() => setFocusedInput('location')}
                     onBlur={() => {
                       setFocusedInput(null);
-                      setTouched({ ...touched, location: true });
-                      validateForm();
                     }}
                     returnKeyType="done"
                     onSubmitEditing={handleContinue}

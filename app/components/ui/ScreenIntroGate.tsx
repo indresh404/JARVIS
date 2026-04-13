@@ -13,6 +13,7 @@ interface ScreenIntroGateProps extends PropsWithChildren {
   introSource?: any;
   introText?: string;
   backgroundColor?: string;
+  onIntroComplete?: () => void;
 }
 
 export function ScreenIntroGate({
@@ -23,6 +24,7 @@ export function ScreenIntroGate({
   introSource,
   introText,
   backgroundColor = COLORS.gray[50],
+  onIntroComplete,
 }: ScreenIntroGateProps) {
   const [phase, setPhase] = useState<IntroPhase>('loading');
 
@@ -45,6 +47,12 @@ export function ScreenIntroGate({
 
     return () => clearTimeout(timeout);
   }, [introDuration, phase]);
+
+  useEffect(() => {
+    if (phase === 'ready' && onIntroComplete) {
+      onIntroComplete();
+    }
+  }, [phase, onIntroComplete]);
 
   if (phase === 'loading') {
     return <Loader text={loaderText} backgroundColor={backgroundColor} />;

@@ -1,8 +1,8 @@
 // app/(tabs)/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { router, Tabs, useSegments } from 'expo-router';
+import { router, Slot, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Animated, StyleSheet, TouchableOpacity, View, Easing } from 'react-native';
 
 const FAB_SIZE = 62;
 const TAB_CONFIG = [
@@ -17,9 +17,6 @@ const PRIMARY_COLOR = '#0474FC';
 
 export default function TabLayout() {
   const segments = useSegments();
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
   
   // Smooth animation values
   const navbarGlow = useRef(new Animated.Value(0)).current;
@@ -29,7 +26,7 @@ export default function TabLayout() {
   const tabScaleAnims = useRef(TAB_CONFIG.map(() => new Animated.Value(1))).current;
   const tabTextAnims = useRef(TAB_CONFIG.map(() => new Animated.Value(0))).current;
 
-  // Smooth continuous pulse animation for FAB
+  // Continuous subtle pulse for active tab
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -72,114 +69,43 @@ export default function TabLayout() {
     return 0;
   };
 
-  // Smooth FAB Press Animation
   const handleFabPress = () => {
-    // Smooth scale animation
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 0.85,
-        friction: 6,
-        tension: 50,
-        useNativeDriver: true,
-      }),
-      Animated.spring(navbarBounce, {
-        toValue: 0.99,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // Smooth return animation
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 6,
-          tension: 50,
-          useNativeDriver: true,
-        }),
-        Animated.spring(navbarBounce, {
-          toValue: 1,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, 150);
-
-    // Smooth rotation
-    Animated.timing(rotateAnim, {
-      toValue: 1,
-      duration: 400,
-      useNativeDriver: true,
-    }).start(() => {
-      Animated.timing(rotateAnim, {
-        toValue: 0,
-        duration: 0,
-        useNativeDriver: true,
-      }).start();
-    });
-
-    // Smooth pulse
-    Animated.sequence([
-      Animated.spring(pulseAnim, {
-        toValue: 1.15,
-        friction: 5,
-        tension: 60,
-        useNativeDriver: true,
-      }),
-      Animated.spring(pulseAnim, {
-        toValue: 1,
-        friction: 5,
-        tension: 60,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // Smooth navbar glow
-    Animated.sequence([
-      Animated.timing(navbarGlow, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: false,
-      }),
-      Animated.timing(navbarGlow, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: false,
-      }),
-    ]).start();
-
-    setTimeout(() => {
-      router.push('/(onboarding)/chat');
-    }, 200);
+    router.push('/(onboarding)/chat');
   };
 
-  const rotateInterpolate = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  const handleTabPress = (route: string, index: number) => {
+    // Smooth ripple effect on press
+    Animated.parallel([
+      Animated.timing(tabScaleAnims[index], {
+        toValue: 0.92,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(tabTextAnims[index], {
+        toValue: 0.8,
+        duration: 100,
+        useNativeDriver: false,
+      }),
+    ]).start();
 
-  const pulseRingScale = fabPulseRing.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.4],
-  });
+    // Smooth return
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(tabScaleAnims[index], {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(tabTextAnims[index], {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    }, 100);
 
-  const pulseRingOpacity = fabPulseRing.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.4, 0],
-  });
-
-  const navbarGlowIntensity = navbarGlow.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.2, 0.5],
-  });
-
-  const fabShadowScale = fabShadowAnim.interpolate({
-    inputRange: [1, 1.1],
-    outputRange: [1, 1.05],
-  });
+    router.push(route as any);
+  };
 
   const activeTab = getActiveTab();
   const leftTabs = TAB_CONFIG.slice(0, 2);
@@ -209,30 +135,11 @@ export default function TabLayout() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarStyle: { display: 'none' },
-        }}
-      >
-        <Tabs.Screen name="home" options={{ title: 'Home' }} />
-        <Tabs.Screen name="checkin" options={{ title: 'Check-in' }} />
-        <Tabs.Screen name="meds" options={{ title: 'Meds' }} />
-        <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
-        <Tabs.Screen name="aibot" options={{ href: null }} />
-      </Tabs>
-
+      <Slot />
+      
+      {/* Bottom Navigation Bar */}
       <View style={styles.navContainer}>
-        {/* Smooth Animated Navbar */}
-        <Animated.View 
-          style={[
-            styles.navbar,
-            {
-              transform: [{ scale: navbarBounce }],
-              shadowOpacity: navbarGlowIntensity,
-            }
-          ]}
-        >
+        <View style={styles.navbar}>
           <View style={styles.navContent}>
             {leftTabs.map((tab, idx) => {
               const isActive = activeTab === idx;
@@ -248,7 +155,16 @@ export default function TabLayout() {
                     activeOpacity={0.7}
                     style={styles.navItem}
                   >
-                    <Animated.View style={[styles.iconWrapper, isActive && styles.activeIconWrapper]}>
+                    <Animated.View style={[
+                      styles.iconWrapper,
+                      isActive && styles.activeIconWrapper,
+                      {
+                        shadowColor: PRIMARY_COLOR,
+                        shadowOffset: { width: 0, height: 0 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 10,
+                      }
+                    ]}>
                       <Ionicons 
                         name={isActive ? (tab.activeIcon as any) : (tab.icon as any)} 
                         size={24} 
@@ -284,7 +200,16 @@ export default function TabLayout() {
                     activeOpacity={0.7}
                     style={styles.navItem}
                   >
-                    <Animated.View style={[styles.iconWrapper, isActive && styles.activeIconWrapper]}>
+                    <Animated.View style={[
+                      styles.iconWrapper,
+                      isActive && styles.activeIconWrapper,
+                      {
+                        shadowColor: PRIMARY_COLOR,
+                        shadowOffset: { width: 0, height: 0 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 10,
+                      }
+                    ]}>
                       <Ionicons 
                         name={isActive ? (tab.activeIcon as any) : (tab.icon as any)} 
                         size={24} 
@@ -303,42 +228,17 @@ export default function TabLayout() {
               );
             })}
           </View>
-        </Animated.View>
+        </View>
 
-        {/* Smooth Floating Action Button */}
+        {/* Floating Action Button - Clean & Simple */}
         <TouchableOpacity
-          activeOpacity={0.7}
+          activeOpacity={0.8}
           onPress={handleFabPress}
           style={styles.fabOuter}
         >
-          {/* Smooth Pulsing Ring */}
-          <Animated.View
-            style={[
-              styles.fabPulseRing,
-              {
-                transform: [{ scale: pulseRingScale }],
-                opacity: pulseRingOpacity,
-              }
-            ]}
-          />
-          
-          <Animated.View
-            style={[
-              styles.fabButton,
-              {
-                transform: [
-                  { scale: scaleAnim },
-                  { rotate: rotateInterpolate },
-                  { scale: fabShadowScale }
-                ]
-              }
-            ]}
-          >
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <Ionicons name="chatbubble-ellipses" size={30} color={PRIMARY_COLOR} />
-            </Animated.View>
-            <View style={styles.fabRipple} />
-          </Animated.View>
+          <View style={styles.fabButton}>
+            <Ionicons name="chatbubble-ellipses" size={30} color={PRIMARY_COLOR} />
+          </View>
         </TouchableOpacity>
       </View>
     </View>
@@ -348,14 +248,14 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   navContainer: {
     position: 'absolute',
-    bottom: 55,
+    bottom: 50,
     left: 16,
     right: 16,
     alignItems: 'center',
     zIndex: 100,
   },
   navbar: {
-    width: '95%', // Changed from '100%' to '90%' - DECREASED WIDTH
+    width: '95%',
     backgroundColor: PRIMARY_COLOR,
     borderRadius: 35,
     shadowColor: PRIMARY_COLOR,
@@ -363,14 +263,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 8,
-    alignSelf: 'center', // Centers the navbar
+    alignSelf: 'center',
   },
   navContent: {
     flexDirection: 'row',
-    height: 75,
+    height: 65,
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24, // Adjusted for new width
+    paddingHorizontal: 20,
   },
   navItem: {
     flex: 1,
@@ -379,9 +279,9 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   iconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -389,7 +289,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   navLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.7)',
   },
@@ -402,7 +302,7 @@ const styles = StyleSheet.create({
   },
   fabOuter: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 25,
     alignSelf: 'center',
     zIndex: 200,
   },

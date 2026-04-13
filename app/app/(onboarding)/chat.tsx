@@ -1,187 +1,340 @@
 // app/(onboarding)/chat.tsx
-import { ChatBubble } from '@/components/chat/ChatBubble';
-import { ChatInput } from '@/components/chat/ChatInput';
-import { TypingIndicator } from '@/components/chat/TypingIndicator';
-import { COLORS, SPACING, TYPOGRAPHY } from '@/theme';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  FlatList,
-  Platform,
-  StyleSheet,
+  View,
   Text,
-  View
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant';
-  content: string;
+  text: string;
+  isUser: boolean;
   timestamp: Date;
 }
 
-export default function OnboardingChatScreen() {
-  const router = useRouter();
+export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      role: 'assistant',
-      content: "Hi! I'm your Swasthya AI health assistant. I'll help set up your health profile through a quick conversation. Let's start — what's your name?",
+      text: 'Hello! I am your AI Health Assistant. How can I help you today?',
+      isUser: false,
       timestamp: new Date(),
     },
   ]);
-  const [isTyping, setIsTyping] = useState(false);
+  const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
-  const [currentStep, setCurrentStep] = useState(0);
 
-  const steps = ['About You', 'Health History', 'Family', 'Done'];
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, [messages]);
 
-  const handleSend = async (text: string) => {
+  const handleSendMessage = () => {
+    if (!inputText.trim()) return;
+
     // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
-      role: 'user',
-      content: text,
+      text: inputText,
+      isUser: true,
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, userMessage]);
-    
-    // Scroll to bottom
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    
-    // Show typing indicator
-    setIsTyping(true);
-    
+    setInputText('');
+    setIsLoading(true);
+
     // Simulate AI response
     setTimeout(() => {
-      let response = '';
-      if (currentStep === 0) {
-        response = `Nice to meet you, ${text}! What's your age?`;
-        setCurrentStep(1);
-      } else if (currentStep === 1) {
-        response = "Do you have any existing medical conditions? (e.g., diabetes, hypertension, asthma)";
-        setCurrentStep(2);
-      } else if (currentStep === 2) {
-        response = "Any family history of health issues we should know about?";
-        setCurrentStep(3);
-      } else {
-        response = "Thanks for sharing! I've created your health profile. Let's confirm the details.";
-        setIsTyping(false);
-        setTimeout(() => router.push('/(onboarding)/confirm'), 1500);
-        return;
-      }
-      
-      const aiMessage: Message = {
+      const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response,
+        text: getAIResponse(inputText),
+        isUser: false,
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, aiMessage]);
-      setIsTyping(false);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    }, 1500);
+      setMessages(prev => [...prev, aiResponse]);
+      setIsLoading(false);
+    }, 1000);
   };
 
+  const getAIResponse = (userInput: string) => {
+    const input = userInput.toLowerCase();
+    
+    if (input.includes('blood pressure') || input.includes('bp')) {
+      return 'Based on your recent readings, your blood pressure is stable at 120/80. Remember to take your medication regularly and reduce salt intake.';
+    } else if (input.includes('medication') || input.includes('medicine')) {
+      return 'You have 3 active medications:\n• Lisinopril (10mg) - Daily at 8 AM\n• Atorvastatin (20mg) - Daily at 8 PM\n• Aspirin (81mg) - Daily at 8 AM';
+    } else if (input.includes('appointment') || input.includes('doctor')) {
+      return 'Your next appointment with Dr. Sharma is scheduled for April 15, 2026 at 10:00 AM. Would you like me to set a reminder?';
+    } else if (input.includes('diet') || input.includes('food')) {
+      return 'For better heart health, consider:\n• Reducing sodium intake\n• Eating more fruits and vegetables\n• Choosing whole grains\n• Limiting saturated fats';
+    } else if (input.includes('exercise') || input.includes('workout')) {
+      return 'Aim for 30 minutes of moderate exercise, 5 days a week. Walking, swimming, or cycling are great options. Start slow and gradually increase intensity.';
+    } else if (input.includes('hello') || input.includes('hi')) {
+      return 'Hello! How are you feeling today? I\'m here to help with any health questions you have.';
+    } else if (input.includes('thank')) {
+      return 'You\'re welcome! I\'m always here to help with your health concerns. Is there anything else I can assist you with?';
+    } else {
+      return 'I understand you\'re asking about health. Could you please provide more details? I can help with:\n• Blood pressure monitoring\n• Medication reminders\n• Appointment scheduling\n• Diet and nutrition advice\n• Exercise recommendations';
+    }
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const renderMessage = ({ item }: { item: Message }) => (
+    <View style={[styles.messageContainer, item.isUser ? styles.userMessage : styles.aiMessage]}>
+      {!item.isUser && (
+        <View style={styles.aiAvatar}>
+          <Ionicons name="chatbubble-ellipses" size={16} color="#0474FC" />
+        </View>
+      )}
+      <View style={[styles.messageBubble, item.isUser ? styles.userBubble : styles.aiBubble]}>
+        <Text style={[styles.messageText, item.isUser ? styles.userText : styles.aiText]}>
+          {item.text}
+        </Text>
+        <Text style={styles.timestamp}>
+          {formatTime(item.timestamp)}
+        </Text>
+      </View>
+      {item.isUser && (
+        <View style={styles.userAvatar}>
+          <Text style={styles.userAvatarText}>RS</Text>
+        </View>
+      )}
+    </View>
+  );
+
   return (
-    <LinearGradient
-      colors={[COLORS.primary, COLORS.primaryDark]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
-      {/* Progress Bar */}
-      <View style={styles.progressContainer}>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${((currentStep) / steps.length) * 100}%` }]} />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#0474FC" />
+        </TouchableOpacity>
+        <View style={styles.headerIcon}>
+          <Ionicons name="chatbubble-ellipses" size={22} color="#0474FC" />
         </View>
-        <View style={styles.stepsContainer}>
-          {steps.map((step, index) => (
-            <View key={index} style={styles.stepItem}>
-              <View style={[styles.stepDot, index <= currentStep && styles.stepDotActive]} />
-              <Text style={[styles.stepText, index <= currentStep && styles.stepTextActive]}>
-                {step}
-              </Text>
-            </View>
-          ))}
-        </View>
+        <Text style={styles.headerTitle}>AI Health Assistant</Text>
+        <View style={styles.headerRight} />
       </View>
 
-      {/* Chat Messages */}
+      {/* Messages */}
       <FlatList
         ref={flatListRef}
         data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <ChatBubble
-            role={item.role}
-            content={item.content}
-            timestamp={item.timestamp}
-          />
-        )}
-        contentContainerStyle={styles.chatContent}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+        renderItem={renderMessage}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.messagesList}
+        showsVerticalScrollIndicator={false}
       />
 
-      {/* Typing Indicator */}
-      {isTyping && <TypingIndicator />}
+      {/* Loading Indicator */}
+      {isLoading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#0474FC" />
+          <Text style={styles.loadingText}>AI is thinking...</Text>
+        </View>
+      )}
 
-      {/* Chat Input */}
-      <ChatInput onSend={handleSend} />
-    </LinearGradient>
+      {/* Input Area */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Ask me anything about your health..."
+            placeholderTextColor="#9CA3AF"
+            value={inputText}
+            onChangeText={setInputText}
+            multiline
+            maxLength={500}
+          />
+          <TouchableOpacity
+            onPress={handleSendMessage}
+            disabled={!inputText.trim() || isLoading}
+            style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
+          >
+            <Ionicons name="send" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
+    backgroundColor: '#F9FAFB',
   },
-  progressContainer: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md,
-    backgroundColor: COLORS.primary,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 2,
-    marginBottom: SPACING.md,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: COLORS.secondary || COLORS.green[500],
-    borderRadius: 2,
-  },
-  stepsContainer: {
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  stepItem: {
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 12 : 40,
+    paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  stepDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  stepDotActive: {
-    backgroundColor: COLORS.green[500],
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E8F1FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
   },
-  stepText: {
-    fontSize: TYPOGRAPHY.sizes.xs,
-    fontFamily: TYPOGRAPHY.fonts.medium,
-    color: 'rgba(255,255,255,0.5)',
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
   },
-  stepTextActive: {
-    color: COLORS.white,
+  headerRight: {
+    width: 40,
   },
-  chatContent: {
-    paddingVertical: SPACING.md,
-    flexGrow: 1,
+  messagesList: {
+    padding: 16,
+    paddingBottom: 20,
+  },
+  messageContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    alignItems: 'flex-end',
+  },
+  userMessage: {
+    justifyContent: 'flex-end',
+  },
+  aiMessage: {
+    justifyContent: 'flex-start',
+  },
+  aiAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E8F1FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  userAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0474FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  userAvatarText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  messageBubble: {
+    maxWidth: '75%',
+    padding: 12,
+    borderRadius: 20,
+  },
+  userBubble: {
+    backgroundColor: '#0474FC',
+    borderBottomRightRadius: 4,
+  },
+  aiBubble: {
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  messageText: {
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  userText: {
+    color: '#FFFFFF',
+  },
+  aiText: {
+    color: '#111827',
+  },
+  timestamp: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    marginTop: 4,
+    alignSelf: 'flex-end',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 12,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    maxHeight: 100,
+    fontSize: 15,
+    color: '#111827',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#0474FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
   },
 });

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSegments } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
+import { Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View, Alert, TextInput } from 'react-native';
 import { getPendingCheckins, submitCheckin } from '@/services/supabase.service';
 import { useAuthStore } from '@/store/auth.store';
 
@@ -79,22 +79,40 @@ export default function CheckinScreen() {
   const [answers, setAnswers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const { user } = useAuthStore();
-  const patientId = user?.id;
+  const { user, patientId: storePatientId } = useAuthStore();
+  const patientId = user?.id || storePatientId;
 
   useEffect(() => {
     if (patientId) {
       loadQuestions();
+    } else {
+      Alert.alert('Error', 'Unable to load patient information. Please log in again.');
+      setLoading(false);
     }
   }, [patientId]);
+  
   const loadQuestions = async () => {
+    if (!patientId) {
+      Alert.alert('Error', 'Patient ID not found');
+      setLoading(false);
+      return;
+    }
+
     try {
-      if (!patientId) return;
       const data = await getPendingCheckins(patientId);
-      setQuestions(data);
-      setAnswers(data.map((q: any) => ({ question_id: q.id, answer: '' })));
+      if (!data || data.length === 0) {
+        Alert.alert('No Check-ins', 'No pending check-ins at this time.');
+        setQuestions([]);
+        setAnswers([]);
+      } else {
+        setQuestions(data);
+        setAnswers(data.map((q: any) => ({ question_id: q.id, answer: '' })));
+      }
     } catch (error) {
       console.error("Check-in error:", error);
+      Alert.alert('Error', 'Failed to load check-ins. Please try again.');
+      setQuestions([]);
+      setAnswers([]);
     } finally {
       setLoading(false);
     }
@@ -105,13 +123,20 @@ export default function CheckinScreen() {
   };
 
   const handleSubmit = async () => {
+    if (!patientId) {
+      Alert.alert('Error', 'Patient ID not found');
+      return;
+    }
+
     try {
-      if (!patientId) return;
       await submitCheckin(patientId, answers);
       Alert.alert("Success", "Check-in completed!");
       setQuestions([]);
+      setAnswers([]);
+      await loadQuestions();
     } catch (error) {
-      Alert.alert("Error", "Failed to submit");
+      console.error('Submit error:', error);
+      Alert.alert("Error", "Failed to submit check-in. Please try again.");
     }
   };
 
@@ -148,7 +173,7 @@ export default function CheckinScreen() {
             {questions.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Ionicons name="checkmark-done-circle-outline" size={80} color="#10B981" />
-                <Text style={styles.emptyTitle}>You're all set!</Text>
+                <Text style={styles.emptyTitle}>You&apos;re all set!</Text>
                 <Text style={styles.emptySubtitle}>No pending questions for today.</Text>
               </View>
             ) : (
@@ -173,6 +198,14 @@ export default function CheckinScreen() {
                         </TouchableOpacity>
                       ))}
                     </View>
+                    <TextInput
+                      style={styles.answerInput}
+                      placeholder="Add details (optional)"
+                      placeholderTextColor="#9CA3AF"
+                      value={answers.find(a => a.question_id === q.id)?.answer || ''}
+                      onChangeText={(text) => handleAnswer(q.id, text)}
+                      multiline
+                    />
                   </View>
                 ))}
                 
@@ -273,6 +306,17 @@ const styles = StyleSheet.create({
   optionTextActive: {
     color: '#0474FC',
     fontWeight: '600',
+  },
+  answerInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 12,
+    minHeight: 46,
+    color: '#1F2937',
+    backgroundColor: '#F9FAFB',
   },
   submitButton: {
     backgroundColor: '#0474FC',

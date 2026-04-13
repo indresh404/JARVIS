@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,13 +15,15 @@ import {
   View
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { getCurrentPatient, normalizePhone } from '@/services/auth.service';
+import { useAuthStore } from '@/store/auth.store';
 
 import { COLORS, STYLES } from '../../constants/Colors';
 import { supabase } from '@/services/supabaseClient';
-import { useAuthStore } from '@/store/auth.store';
-
 export default function UserDetailsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ phone?: string }>();
+  const { patientId, phoneNumber: storedPhone } = useAuthStore();
 
   // Form states
   const [name, setName] = useState('');
@@ -30,6 +32,7 @@ export default function UserDetailsScreen() {
   const [gender, setGender] = useState<string | null>(null);
   const [location, setLocation] = useState('');
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // UI states
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
@@ -40,6 +43,29 @@ export default function UserDetailsScreen() {
   const ageInputRef = useRef<TextInput>(null);
   const phoneInputRef = useRef<TextInput>(null);
   const locationInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const initialPhone = normalizePhone(params.phone || storedPhone || '');
+    if (initialPhone) {
+      setPhoneNumber(initialPhone);
+    }
+
+    const hydrateExistingProfile = async () => {
+      try {
+        const patient = patientId ? await getCurrentPatient() : null;
+        if (!patient) return;
+
+        setName(patient.name || '');
+        setAge(patient.age ? String(patient.age) : '');
+        setPhoneNumber(patient.phone || initialPhone);
+        setGender(patient.gender || null);
+      } catch (error) {
+        console.error('Failed to hydrate patient profile', error);
+      }
+    };
+
+    void hydrateExistingProfile();
+  }, [params.phone, patientId, storedPhone]);
 
   // Get current location
   const getCurrentLocation = async () => {
@@ -220,7 +246,7 @@ export default function UserDetailsScreen() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     // Mark all fields as touched
     setTouched({
       name: true,
@@ -237,39 +263,99 @@ export default function UserDetailsScreen() {
 
 
   const saveProfile = async () => {
-    const { user } = useAuthStore.getState();
-    if (!user) {
-      Alert.alert('Error', 'No authenticated user found');
+    const authStore = useAuthStore.getState();
+    const { patientId: storePatientId, phoneNumber: storePhone } = authStore;
+    
+    // Use phone number as the source of truth for new users
+    const userPhone = normalizePhone(phoneNumber);
+    if (!userPhone) {
+      Alert.alert('Error', 'Invalid phone number');
       return;
     }
 
+    setIsSaving(true);
     try {
-      const { error } = await supabase.from('users').upsert({
-        id: user.id,
-        name: name.trim(),
-        age: parseInt(age),
-        phone: phoneNumber.trim(),
-        gender: gender,
-        state: location.trim(),
-        updated_at: new Date().toISOString(),
-      });
+      console.log('=== Saving User Profile ===');
+      console.log('Phone:', userPhone, 'Name:', name, 'Age:', age, 'Gender:', gender);
 
-      if (error) {
-        Alert.alert('Error Saving Profile', error.message);
-        return;
+      // Check if user already exists by phone
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', userPhone)
+        .maybeSingle();
+
+      console.log('Existing user:', existingUser?.id);
+
+      let userId = existingUser?.id;
+
+      // If user doesn't exist, insert new record
+      if (!userId) {
+        console.log('Creating new user record');
+        const { data: newUser, error: insertError } = await supabase
+          .from('users')
+          .insert({
+            name: name.trim(),
+            age: parseInt(age),
+            phone: userPhone,
+            gender: gender,
+          })
+          .select('id')
+          .maybeSingle();
+
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          Alert.alert('Error Saving Profile', 'Failed to create user: ' + insertError.message);
+          setIsSaving(false);
+          return;
+        }
+
+        userId = newUser?.id;
+        console.log('New user created with ID:', userId);
+      } else {
+        // Update existing user
+        console.log('Updating existing user:', userId);
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            name: name.trim(),
+            age: parseInt(age),
+            gender: gender,
+          })
+          .eq('id', userId);
+
+        if (updateError) {
+          console.error('Update error:', updateError);
+          Alert.alert('Error Saving Profile', updateError.message);
+          setIsSaving(false);
+          return;
+        }
       }
 
-      useAuthStore.getState().setHasProfile(true);
+      // Update auth store with real user ID
+      authStore.setSessionState({
+        userId: userId,
+        patientId: userId,
+        phoneNumber: userPhone,
+        isLoggedIn: true,
+        hasProfile: true,
+        hasFamilyGroup: false,
+      });
+
+      console.log('Profile saved successfully, user ID:', userId);
+      setIsSaving(false);
       router.push('/(onboarding)/family-setup');
-    } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred while saving your profile');
+    } catch (error: any) {
+      console.error('Save profile error:', error);
+      Alert.alert('Error', error.message || 'An unexpected error occurred while saving your profile');
+      setIsSaving(false);
     }
   };
 
   const isFormValid = () => {
     return name.trim() &&
       age.trim() &&
-      phoneNumber.trim() &&
+      normalizePhone(phoneNumber).length === 10 &&
       gender &&
       location.trim() &&
       !errors.name &&
@@ -390,9 +476,9 @@ export default function UserDetailsScreen() {
                   placeholderTextColor={COLORS.text.muted}
                   value={phoneNumber}
                   onChangeText={(text) => {
-                    setPhoneNumber(text);
+                    setPhoneNumber(normalizePhone(text));
                     setTouched({ ...touched, phoneNumber: true });
-                    validateField('phoneNumber', text);
+                    validateField('phoneNumber', normalizePhone(text));
                   }}
                   keyboardType="phone-pad"
                   onFocus={() => setFocusedInput('phoneNumber')}
@@ -507,9 +593,13 @@ export default function UserDetailsScreen() {
               ]}
               onPress={handleContinue}
               activeOpacity={0.8}
-              disabled={!isFormValid()}
+              disabled={!isFormValid() || isSaving}
             >
-              <Text style={styles.primaryButtonText}>Continue</Text>
+              {isSaving ? (
+                <ActivityIndicator color={COLORS.white || '#FFFFFF'} />
+              ) : (
+                <Text style={styles.primaryButtonText}>Continue</Text>
+              )}
             </TouchableOpacity>
           </Animated.View>
 

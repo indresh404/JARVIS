@@ -1,37 +1,80 @@
-import React from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
-import { Button } from '@/components/ui/Button';
-import { COLORS, SPACING, TYPOGRAPHY } from '@/theme';
+// components/heatmap/HeatmapWebView.tsx
+import React, { useCallback } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
+import { WebView } from 'react-native-webview';
 
-interface Props {
-  visible: boolean;
-  zone: string;
-  score: number;
-  symptoms: string[];
-  onClose: () => void;
+interface HeatmapWebViewProps {
+  webViewRef: React.RefObject<WebView>;
+  onZoneSelect: (zoneId: string | null) => void;
+  onModelLoaded: () => void;
 }
 
-export const ZoneDetailCard = ({ visible, zone, score, symptoms, onClose }: Props) => (
-  <Modal visible={visible} animationType="slide" transparent>
-    <View style={styles.overlay}>
-      <View style={styles.sheet}>
-        <Text style={styles.title}>{zone}</Text>
-        <Text style={styles.score}>Health Index: {score}</Text>
-        {symptoms.map((symptom) => (
-          <Text key={symptom} style={styles.item}>
-            - {symptom}
-          </Text>
-        ))}
-        <Button title="Close" onPress={onClose} />
-      </View>
+// Resolve the local HTML asset path
+const HTML_SOURCE =
+  Platform.OS === 'android'
+    ? { uri: 'file:///android_asset/heatmap/heatmap.html' }
+    : require('@/assets/heatmap/heatmap.html');
+
+export const HeatmapWebView: React.FC<HeatmapWebViewProps> = ({
+  webViewRef,
+  onZoneSelect,
+  onModelLoaded,
+}) => {
+  const handleMessage = useCallback(
+    (event: any) => {
+      try {
+        const data = JSON.parse(event.nativeEvent.data);
+        switch (data.type) {
+          case 'ZONE_SELECTED':
+            onZoneSelect(data.zoneId ?? null);
+            break;
+          case 'MODEL_LOADED':
+            onModelLoaded();
+            break;
+        }
+      } catch (e) {
+        // ignore malformed messages
+      }
+    },
+    [onZoneSelect, onModelLoaded]
+  );
+
+  return (
+    <View style={styles.container}>
+      <WebView
+        ref={webViewRef}
+        source={HTML_SOURCE}
+        style={styles.webview}
+        originWhitelist={['*']}
+        allowFileAccess={true}
+        allowUniversalAccessFromFileURLs={true}
+        allowFileAccessFromFileURLs={true}
+        mixedContentMode="always"
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        scrollEnabled={false}
+        bounces={false}
+        overScrollMode="never"
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+        onMessage={handleMessage}
+        // Prevent WebView from intercepting gestures meant for the parent ScrollView
+        nestedScrollEnabled={false}
+        // For iOS, allow inline media
+        mediaPlaybackRequiresUserAction={false}
+        allowsInlineMediaPlayback={true}
+      />
     </View>
-  </Modal>
-);
+  );
+};
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: `${COLORS.blue[900]}66` },
-  sheet: { backgroundColor: COLORS.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: SPACING.lg },
-  title: { color: COLORS.text.primary, fontFamily: TYPOGRAPHY.fonts.bold, fontSize: TYPOGRAPHY.sizes.xl },
-  score: { marginTop: 6, color: COLORS.text.secondary, marginBottom: SPACING.md },
-  item: { color: COLORS.text.muted, marginBottom: 4 },
+  container: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: '#050505',
+  },
 });

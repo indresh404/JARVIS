@@ -18,9 +18,9 @@ interface ScreenIntroGateProps extends PropsWithChildren {
 
 export function ScreenIntroGate({
   children,
-  loaderDuration = 3000,
+  loaderDuration = 4000,
   loaderText = 'Preparing your health view...',
-  introDuration = 6000,
+  introDuration = 4000,
   introSource,
   introText,
   backgroundColor = COLORS.gray[50],

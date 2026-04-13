@@ -1,10 +1,13 @@
 // app/(tabs)/profile/index.tsx
 import { ScreenIntroGate } from '@/components/ui/ScreenIntroGate';
 import { SkeletonProfileScreen } from '@/components/ui/SkeletonLoader';
+import { signOut, getFamilyByPatientId } from '@/services/auth.service';
+import { useAuthStore } from '@/store/auth.store';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSegments } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import React, { useState, useEffect } from 'react';
+import QRCode from 'react-native-qrcode-svg';
 import {
     Alert,
     Platform,
@@ -19,7 +22,6 @@ import {
     Image,
 } from 'react-native';
 import { supabase } from '@/services/supabaseClient';
-import { useAuthStore } from '@/store/auth.store';
 
 // Color System with Primary #0474FC
 const COLORS = {
@@ -111,52 +113,90 @@ const TopNavBar = ({
 };
 
 export default function ProfileScreen() {
+  const router = useRouter();
+  const logout = useAuthStore((state) => state.logout);
+  const patientId = useAuthStore((state) => state.patientId);
   const segments = useSegments();
   const currentRoute = segments[segments.length - 1];
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const { user, logout: storeLogout } = useAuthStore();
+  const { user } = useAuthStore();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [familyData, setFamilyData] = useState<any>(null);
+  const [loadingFamily, setLoadingFamily] = useState(false);
 
 
   useEffect(() => {
-    if (user) {
+    if (user?.id || patientId) {
       loadProfile();
+      loadFamily();
+      return;
     }
-  }, [user]);
+    setProfile({
+      name: 'Demo User',
+      age: 30,
+      gender: 'Other',
+      phone: '9999999999',
+      risk_level: 'Low',
+      profile_summary: 'Demo profile loaded because backend/auth is unavailable.',
+      chronic_diseases: [],
+      medications: [],
+      allergies: [],
+      state: 'Demo State',
+      adherence_rate: 100,
+    });
+    setLoading(false);
+  }, [user, patientId]);
 
   const loadProfile = async () => {
     try {
-      if (!user) return;
+      const resolvedId = user?.id || patientId;
+      if (!resolvedId) return;
       
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', resolvedId)
         .single();
 
       if (error) throw error;
       setProfile(data);
     } catch (error) {
       console.error("Profile load error:", error);
+      setProfile((prev: any) => prev || {
+        name: 'Demo User',
+        age: 30,
+        gender: 'Other',
+        phone: '9999999999',
+        risk_level: 'Low',
+        profile_summary: 'Backend unavailable, showing demo profile.',
+        chronic_diseases: [],
+        medications: [],
+        allergies: [],
+        state: 'Demo State',
+        adherence_rate: 100,
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Logout', 
-        style: 'destructive',
-        onPress: async () => {
-          await supabase.auth.signOut();
-          storeLogout();
-          router.replace('/(auth)/welcome');
-        }
+  const loadFamily = async () => {
+    try {
+      const resolvedId = user?.id || patientId;
+      if (!resolvedId) return;
+
+      setLoadingFamily(true);
+      const family = await getFamilyByPatientId(resolvedId);
+      if (family) {
+        console.log('Family loaded:', family.family_name);
+        setFamilyData(family);
       }
-    ]);
+    } catch (error) {
+      console.error("Family load error:", error);
+    } finally {
+      setLoadingFamily(false);
+    }
   };
 
   const handleIntroComplete = () => {
@@ -177,6 +217,58 @@ export default function ProfileScreen() {
   const handleDownloadQR = () => {
     Alert.alert('Download QR', 'QR code saved to your gallery');
   };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Logout error', error);
+    } finally {
+      logout();
+      router.replace('/(auth)/welcome');
+    }
+  };
+
+  const handleCopyFamilyCode = async () => {
+    if (!familyData?.join_code) return;
+    try {
+      // Try using expo-clipboard if available
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const Clipboard = require('expo-clipboard');
+      await Clipboard.setStringAsync(familyData.join_code);
+      Alert.alert('Copied!', 'Family code copied to clipboard');
+    } catch {
+      Alert.alert('Family Code', `Your family code is: ${familyData.join_code}`);
+    }
+  };
+
+  const handleShareFamilyCode = async () => {
+    if (!familyData?.join_code) return;
+    try {
+      await Share.share({
+        message: `Join my family "${familyData.family_name}" on Swasthya! Use code: ${familyData.join_code}`,
+        title: 'Share Family Code',
+      });
+    } catch {
+      Alert.alert('Error', 'Could not share family code');
+    }
+  };
+
+  const handleSetupFamily = () => {
+    router.push('/(onboarding)/family-setup');
+  };
+
+  const recentRecords = [
+    { id: 1, title: 'Blood Report', date: 'Mar 15, 2026' },
+    { id: 2, title: 'ECG Analysis', date: 'Mar 10, 2026' },
+    { id: 3, title: 'Prescription', date: 'Mar 5, 2026' },
+  ];
+
+  const familyMembers = [
+    { name: 'Meera Sharma', risk: 'Low', age: 34, relationship: 'Spouse' },
+    { name: 'Aarav Sharma', risk: 'Moderate', age: 12, relationship: 'Son' },
+    { name: 'Vikram Sharma', risk: 'Low', age: 65, relationship: 'Father' },
+  ];
 
   const getRiskColor = (risk: string) => {
     switch(risk?.toLowerCase()) {
@@ -325,7 +417,117 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* E. Settings */}
+        {/* F. Family Information & QR */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Your Family</Text>
+          {familyData ? (
+            <>
+              <TouchableOpacity 
+                style={styles.familyQRCard}
+                activeOpacity={0.95}
+              >
+                <View style={styles.familyQRLeft}>
+                  <View style={styles.familyQRCode}>
+                    <Ionicons name="people" size={28} color={COLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.familyQRTitle}>{familyData.family_name || 'Your Family'}</Text>
+                    <Text style={styles.familyQRSubtitle}>Code: {familyData.join_code}</Text>
+                  </View>
+                </View>
+                <TouchableOpacity activeOpacity={0.7}>
+                  <Ionicons name="chevron-forward" size={24} color={COLORS.text.secondary} />
+                </TouchableOpacity>
+              </TouchableOpacity>
+
+              <View style={styles.familyQRButtons}>
+                <TouchableOpacity 
+                  style={styles.familyActionButton}
+                  onPress={handleCopyFamilyCode}
+                >
+                  <Ionicons name="copy-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.familyActionText}>Copy Code</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.familyActionButton}
+                  onPress={handleShareFamilyCode}
+                >
+                  <Ionicons name="share-social-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.familyActionText}>Share</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Family QR Code Display */}
+              <View style={styles.familyQRDisplayContainer}>
+                <Text style={styles.familyQRLabel}>Share this code to invite members</Text>
+                <View style={styles.familyQRBox}>
+                  <QRCode 
+                    value={`SWASTHYA_FAMILY:${familyData.join_code}`}
+                    size={130}
+                    color="#000000"
+                    backgroundColor="#FFFFFF"
+                  />
+                </View>
+              </View>
+            </>
+          ) : (
+            <View style={styles.noFamilyCard}>
+              <Ionicons name="people-outline" size={48} color={COLORS.primary} />
+              <Text style={styles.noFamilyTitle}>No Family Yet</Text>
+              <Text style={styles.noFamilyText}>
+                Create a family or join an existing one to share health data with family members
+              </Text>
+              <TouchableOpacity 
+                style={styles.joinFamilyButton}
+                activeOpacity={0.8}
+                onPress={handleSetupFamily}
+              >
+                <LinearGradient
+                  colors={[COLORS.primary, COLORS.primaryDark]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.joinFamilyButtonGradient}
+                >
+                  <Ionicons name="add-circle" size={20} color="#FFFFFF" />
+                  <Text style={styles.joinFamilyButtonText}>Set Up Family</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* G. Quick Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity style={styles.actionButton}>
+              <View style={[styles.actionIconBg, { backgroundColor: COLORS.primaryLight }]}>
+                <Ionicons name="speedometer-outline" size={24} color={COLORS.primary} />
+              </View>
+              <Text style={styles.actionText}>Dashboard</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => router.push('/(tabs)/profile/schemes')}
+            >
+              <View style={[styles.actionIconBg, { backgroundColor: COLORS.primaryLight }]}>
+                <Ionicons name="medal-outline" size={24} color={COLORS.primary} />
+              </View>
+              <Text style={styles.actionText}>Check Schemes</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.actionButton}>
+              <View style={[styles.actionIconBg, { backgroundColor: COLORS.primaryLight }]}>
+                <Ionicons name="add-circle-outline" size={24} color={COLORS.primary} />
+              </View>
+              <Text style={styles.actionText}>Add Record</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* H. Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Settings</Text>
           
@@ -337,7 +539,15 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color={COLORS.text.light} />
           </TouchableOpacity>
           
-          <TouchableOpacity style={[styles.settingItem, styles.logoutItem]}>
+          <TouchableOpacity style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="settings-outline" size={22} color={COLORS.text.secondary} />
+              <Text style={styles.settingText}>App Settings</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.text.light} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={[styles.settingItem, styles.logoutItem]} onPress={handleLogout}>
             <View style={styles.settingLeft}>
               <Ionicons name="log-out-outline" size={22} color={COLORS.risk.high} />
               <Text style={[styles.settingText, styles.logoutText]}>Logout</Text>
@@ -775,6 +985,93 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.text.secondary,
     marginTop: 2,
+  },
+  familyQRButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  familyActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  familyActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  familyQRDisplayContainer: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  familyQRLabel: {
+    fontSize: 12,
+    color: COLORS.text.secondary,
+    marginBottom: 12,
+  },
+  familyQRBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noFamilyCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  noFamilyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noFamilyText: {
+    fontSize: 13,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  joinFamilyButton: {
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  joinFamilyButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  joinFamilyButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   memberCard: {
     flexDirection: 'row',

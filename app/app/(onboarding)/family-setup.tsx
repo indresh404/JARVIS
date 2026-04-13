@@ -1,162 +1,230 @@
 // app/(onboarding)/family-setup.tsx
+import { useAuthStore } from '@/store/auth.store';
 import { TYPOGRAPHY } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { supabase } from '@/services/supabaseClient';
-import { useAuthStore } from '@/store/auth.store';
+import QRCode from 'react-native-qrcode-svg';
 
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    createFamilyForPatient,
+    getPatientById,
+    getPatientByPhone,
+    joinFamilyForPatient,
+    type PatientRecord
+} from '@/services/auth.service';
+import {
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { GestureHandlerRootView, TouchableWithoutFeedback } from 'react-native-gesture-handler';
-import Animated, {
-  FadeInDown,
-  FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
 
 const CODE_LENGTH = 6;
 
 export default function FamilySetupScreen() {
   const router = useRouter();
+  const { patientId, phoneNumber, setSessionState } = useAuthStore();
   const [codeDigits, setCodeDigits] = useState<string[]>(Array(CODE_LENGTH).fill(''));
   const [showQRScanner, setShowQRScanner] = useState(false);
-  const [, requestPermission] = useCameraPermissions();
+  const [showFamilyNameModal, setShowFamilyNameModal] = useState(false);
+  const [familyName, setFamilyName] = useState('');
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [showGeneratedCodeModal, setShowGeneratedCodeModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
   const inputRefs = useRef<(TextInput | null)[]>([]);
-
-  const scaleCreate = useSharedValue(1);
-  const scaleJoin = useSharedValue(1);
 
   const handleBack = () => router.back();
 
-  const handleCreate = async () => {
-    const { user } = useAuthStore.getState();
-    if (!user) {
-      Alert.alert('Error', 'No authenticated user found');
+  const requirePatient = async (): Promise<PatientRecord> => {
+    console.log('=== Requiring Patient ===');
+    console.log('PatientId:', patientId, 'PhoneNumber:', phoneNumber);
+
+    if (patientId) {
+      const storePatient = await getPatientById(patientId);
+      if (storePatient) {
+        console.log('Found patient by ID:', storePatient.id);
+        return storePatient;
+      }
+    }
+
+    if (phoneNumber) {
+      const phonePatient = await getPatientByPhone(phoneNumber);
+      if (phonePatient) {
+        console.log('Found patient by phone:', phonePatient.id);
+        return phonePatient;
+      }
+    }
+
+    // If we reach here, create a temporary patient object from available data
+    if (phoneNumber) {
+      console.log('Creating temporary patient from phone:', phoneNumber);
+      return {
+        id: patientId || `temp_${phoneNumber}`,
+        name: 'User',
+        phone: phoneNumber,
+        age: null,
+        gender: null,
+        family_id: null,
+        created_at: new Date().toISOString(),
+      };
+    }
+
+    throw new Error('Please complete your profile before creating or joining a family.');
+  };
+
+  // Handle create family button click
+  const handleCreateClick = () => {
+    setShowFamilyNameModal(true);
+  };
+
+  // Create family with name and generate code
+  const handleCreateFamily = async () => {
+    if (!familyName.trim()) {
+      Alert.alert('Error', 'Please enter a family name');
       return;
     }
 
+    setIsCreating(true);
     try {
-      const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      
-      const { data: family, error: familyError } = await supabase.from('families').insert({
-        family_name: `${useAuthStore.getState().user?.email?.split('@')[0] || 'My'} Family`,
-        created_by: user.id,
-        join_code: joinCode,
-      }).select().single();
+      const patient = await requirePatient();
+      const { joinCode } = await createFamilyForPatient(familyName.trim(), patient);
 
-      if (familyError || !family) {
-        Alert.alert('Error Creating Family', familyError?.message || 'Failed to create family');
-        return;
-      }
-
-      const { error: groupError } = await supabase.from('family_groups').insert({
-        family_id: family.id,
-        patient_id: user.id,
-        role: 'admin',
+      setGeneratedCode(joinCode);
+      setShowFamilyNameModal(false);
+      setShowGeneratedCodeModal(true);
+      setSessionState({
+        patientId: patient.id,
+        hasProfile: true,
+        hasFamilyGroup: true,
       });
-
-
-      if (groupError) {
-        Alert.alert('Error Joining Group', groupError.message);
-        return;
-      }
-
-      useAuthStore.getState().setHasFamilyGroup(true);
-      router.push('/(tabs)/home');
-    } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred while creating family');
+      
+    } catch (error: any) {
+      console.error('Error creating family:', error);
+      Alert.alert('Error', error.message || 'Failed to create family. Please try again.');
+    } finally {
+      setIsCreating(false);
     }
   };
 
-  const handleJoin = async () => {
-    const { user } = useAuthStore.getState();
-    if (!user) {
-      Alert.alert('Error', 'No authenticated user found');
-      return;
-    }
-
-    const code = codeDigits.join('').toUpperCase();
+  const handleJoinFlow = async () => {
+    const code = codeDigits.join('');
     if (code.length !== CODE_LENGTH) {
       Alert.alert('Error', 'Please enter a valid 6-digit code');
       return;
     }
 
+    setIsJoining(true);
     try {
-      // Find family by join_code
-      const { data: family, error: familyError } = await supabase
-        .from('families')
-        .select('id')
-        .eq('join_code', code)
-        .single();
+      const patient = await requirePatient();
+      const family = await joinFamilyForPatient(code, patient);
 
-      if (familyError || !family) {
-        Alert.alert('Error Joining Family', 'Invalid family code');
-        return;
-      }
-
-      // Add user to family_groups
-      const { error: groupError } = await supabase.from('family_groups').insert({
-        family_id: family.id,
-        patient_id: user.id,
-        role: 'member',
+      setSessionState({
+        patientId: patient.id,
+        hasProfile: true,
+        hasFamilyGroup: true,
       });
 
-      if (groupError) {
-        Alert.alert('Error Joining Family', groupError.message);
-        return;
-      }
+      Alert.alert('Success!', `You've successfully joined "${family.family_name}" family!`, [
+        {
+          text: 'Continue',
+          onPress: () => router.push('/(tabs)/home'),
+        },
+      ]);
 
-      useAuthStore.getState().setHasFamilyGroup(true);
-      router.push('/(tabs)/home');
-    } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred while joining family');
+      setCodeDigits(Array(CODE_LENGTH).fill(''));
+    } catch (error: any) {
+      console.error('Error joining family:', error);
+      Alert.alert('Error', error.message || 'Failed to join family. Please try again.');
+    } finally {
+      setIsJoining(false);
     }
   };
 
 
   const handleQRScan = async () => {
-    const { status } = await requestPermission();
-    if (status === 'granted') {
-      setShowQRScanner(true);
-    } else {
-      Alert.alert('Permission Required', 'Please grant camera permission to scan QR codes');
+    if (!permission?.granted) {
+      const { granted } = await requestPermission();
+      if (!granted) {
+        Alert.alert('Permission Required', 'Please grant camera permission to scan QR codes');
+        return;
+      }
     }
+    setShowQRScanner(true);
   };
 
   const handleBarCodeScanned = (result: any) => {
-    const scannedCode = result.data;
-    const code = scannedCode.slice(-6);
-    const digits = code.split('');
-    
-    const newDigits = [...codeDigits];
-    for (let i = 0; i < Math.min(digits.length, CODE_LENGTH); i++) {
-      if (digits[i] && /^\d$/.test(digits[i])) {
-        newDigits[i] = digits[i];
+    try {
+      const scannedCode = String(result.data || '').trim().toUpperCase();
+      console.log('Scanned QR code:', scannedCode);
+      
+      let code = '';
+      
+      // Try different patterns to extract the 6-digit code
+      // Pattern 1: SWASTHYA_FAMILY:XXXXXX
+      let match = scannedCode.match(/SWASTHYA_FAMILY[:\s]+(\d{6})/i);
+      if (match) {
+        code = match[1];
       }
-    }
-    setCodeDigits(newDigits);
-    setShowQRScanner(false);
-    
-    if (newDigits.every(d => d !== '')) {
-      setTimeout(() => {
-        router.push('/(tabs)/home');
-      }, 500);
+      
+      // Pattern 2: Just 6 digits (exact match)
+      if (!code) {
+        match = scannedCode.match(/^(\d{6})$/);
+        if (match) {
+          code = match[1];
+        }
+      }
+      
+      // Pattern 3: 6 digits anywhere in the string (last resort)
+      if (!code) {
+        match = scannedCode.match(/(\d{6})/);
+        if (match) {
+          code = match[1];
+        }
+      }
+      
+      // Validate the code format
+      if (!code || code.length !== CODE_LENGTH || !/^\d{6}$/.test(code)) {
+        Alert.alert(
+          'Invalid QR Code',
+          'This QR code does not contain a valid 6-digit family join code.\n\nMake sure you\'re scanning a valid Swasthya family QR code.',
+          [{ text: 'Try Again', onPress: () => setShowQRScanner(true) }]
+        );
+        return;
+      }
+      
+      console.log('Extracted family code:', code);
+      const digits = code.split('');
+      
+      const newDigits = [...codeDigits];
+      for (let i = 0; i < Math.min(digits.length, CODE_LENGTH); i++) {
+        if (digits[i] && /^\d$/.test(digits[i])) {
+          newDigits[i] = digits[i];
+        }
+      }
+      setCodeDigits(newDigits);
+      setShowQRScanner(false);
+      
+      // Auto-join after scanning if code is complete
+      if (newDigits.every(d => d !== '')) {
+        setTimeout(() => handleJoinFlow(), 500);
+      }
+    } catch (error) {
+      console.error('QR scan error:', error);
+      Alert.alert('Error', 'Failed to process QR code. Please try again.');
+      setShowQRScanner(true);
     }
   };
 
@@ -193,35 +261,28 @@ export default function FamilySetupScreen() {
     }
   };
 
-  const handleCardPressIn = (card: 'create' | 'join') => {
-    const sv = card === 'create' ? scaleCreate : scaleJoin;
-    sv.value = withSpring(0.98, { damping: 15 });
+  const copyToClipboard = async (code: string) => {
+    try {
+      // expo-clipboard is optional in this project, so load it only when available.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const Clipboard = require('expo-clipboard');
+      await Clipboard.setStringAsync(code);
+      Alert.alert('Copied!', 'Family code copied to clipboard');
+    } catch (error) {
+      console.error('Copy error:', error);
+      Alert.alert('Family Code', `Your family code is: ${code}`);
+    }
   };
-
-  const handleCardPressOut = (card: 'create' | 'join') => {
-    const sv = card === 'create' ? scaleCreate : scaleJoin;
-    sv.value = withSpring(1, { damping: 15 });
-  };
-
-  const createAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scaleCreate.value }],
-  }));
-
-  const joinAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scaleJoin.value }],
-  }));
 
   const isCodeComplete = codeDigits.every((d) => d !== '');
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <LinearGradient
-        colors={['#116acf', '#116acf', '#4da0fe']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-
+    <LinearGradient
+      colors={['#116acf', '#116acf', '#4da0fe']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -247,36 +308,28 @@ export default function FamilySetupScreen() {
             </View>
 
             {/* Step Indicator */}
-            <Animated.View 
-              entering={FadeInDown.delay(50).springify()}
-              style={styles.stepContainer}
-            >
+            <View style={styles.stepContainer}>
               <Text style={styles.stepText}>Step 2 of 2</Text>
               <View style={styles.progressBar}>
                 <View style={styles.progressFill} />
               </View>
-            </Animated.View>
+            </View>
 
-            {/* Welcome - With Cursive Font */}
-            <Animated.View
-              entering={FadeInDown.delay(100).springify()}
-              style={styles.welcomeSection}
-            >
+            {/* Welcome */}
+            <View style={styles.welcomeSection}>
               <Text style={styles.mainTitle}>Welcome Home</Text>
               <Text style={[styles.mainSubtitle, styles.cursiveText]}>
                 Synchronize your health journey with those who matter most.
               </Text>
-            </Animated.View>
+            </View>
 
             {/* Create Family Card */}
-            <TouchableWithoutFeedback
-              onPressIn={() => handleCardPressIn('create')}
-              onPressOut={() => handleCardPressOut('create')}
+            <TouchableOpacity
+              activeOpacity={0.95}
+              onPress={handleCreateClick}
+              disabled={isCreating}
             >
-              <Animated.View
-                entering={FadeInDown.delay(200).springify()}
-                style={[styles.card, createAnimatedStyle]}
-              >
+              <View style={styles.card}>
                 <View style={styles.cardContent}>
                   <View style={styles.cardTextSection}>
                     <Text style={styles.cardTitle}>Create your Wonder Family</Text>
@@ -288,123 +341,235 @@ export default function FamilySetupScreen() {
                     <Ionicons name="people-outline" size={28} color="#116acf" />
                   </View>
                 </View>
-                <TouchableOpacity
-                  style={styles.cardButton}
-                  onPress={handleCreate}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.cardButtonText}>Create</Text>
-                  <Ionicons name="chevron-forward" size={20} color="#ffffff" />
-                </TouchableOpacity>
-              </Animated.View>
-            </TouchableWithoutFeedback>
+                <View style={styles.cardButton}>
+                  {isCreating ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <>
+                      <Text style={styles.cardButtonText}>Create</Text>
+                      <Ionicons name="chevron-forward" size={20} color="#ffffff" />
+                    </>
+                  )}
+                </View>
+              </View>
+            </TouchableOpacity>
 
             {/* Join Family Card */}
-            <TouchableWithoutFeedback
-              onPressIn={() => handleCardPressIn('join')}
-              onPressOut={() => handleCardPressOut('join')}
-            >
-              <Animated.View
-                entering={FadeInDown.delay(300).springify()}
-                style={[styles.card, joinAnimatedStyle]}
-              >
-                <View style={styles.cardContent}>
-                  <View style={styles.cardTextSection}>
-                    <Text style={styles.cardTitle}>Join a Family</Text>
-                    <Text style={styles.cardDescription}>
-                      Already have a family group? Enter the unique invite code shared with you.
-                    </Text>
-                  </View>
-                  <View style={[styles.cardIconBox, { backgroundColor: '#f5f5f7' }]}>
-                    <Ionicons name="key-outline" size={28} color="#737686" />
-                  </View>
+            <View style={[styles.card, styles.joinCard]}>
+              <View style={styles.cardContent}>
+                <View style={styles.cardTextSection}>
+                  <Text style={styles.cardTitle}>Join a Family</Text>
+                  <Text style={styles.cardDescription}>
+                    Already have a family group? Enter the unique invite code shared with you.
+                  </Text>
+                </View>
+                <View style={[styles.cardIconBox, { backgroundColor: '#f5f5f7' }]}>
+                  <Ionicons name="key-outline" size={28} color="#737686" />
+                </View>
+              </View>
+
+              {/* Code Input */}
+              <View style={styles.codeInputContainer}>
+                <View style={styles.codeInputRow}>
+                  {codeDigits.map((digit, index) => (
+                    <React.Fragment key={index}>
+                      {index === 3 && <View style={styles.separatorDot} />}
+                      <TextInput
+                        ref={(el) => { inputRefs.current[index] = el; }}
+                        style={[
+                          styles.codeInput,
+                          digit ? styles.codeInputFilled : null,
+                        ]}
+                        maxLength={1}
+                        keyboardType="number-pad"
+                        value={digit}
+                        onChangeText={(value) => handleCodeChange(index, value)}
+                        onKeyPress={({ nativeEvent }) => handleKeyPress(index, nativeEvent.key)}
+                        onFocus={() => handleFocus(index)}
+                        placeholderTextColor="#c3c6d7"
+                        placeholder="·"
+                        selectTextOnFocus
+                        caretHidden
+                      />
+                    </React.Fragment>
+                  ))}
                 </View>
 
-                {/* Code Input */}
-                <Animated.View
-                  entering={FadeInUp.delay(350).springify()}
-                  style={styles.codeInputContainer}
-                >
-                  <View style={styles.codeInputRow}>
-                    {codeDigits.map((digit, index) => (
-                      <React.Fragment key={index}>
-                        {index === 3 && <View style={styles.separatorDot} />}
-                        <TextInput
-                          ref={(el) => { inputRefs.current[index] = el; }}
-                          style={[
-                            styles.codeInput,
-                            digit ? styles.codeInputFilled : null,
-                          ]}
-                          maxLength={1}
-                          keyboardType="number-pad"
-                          value={digit}
-                          onChangeText={(value) => handleCodeChange(index, value)}
-                          onKeyPress={({ nativeEvent }) => handleKeyPress(index, nativeEvent.key)}
-                          onFocus={() => handleFocus(index)}
-                          placeholderTextColor="#c3c6d7"
-                          placeholder="·"
-                          selectTextOnFocus
-                          caretHidden
-                        />
-                      </React.Fragment>
-                    ))}
-                  </View>
+                {/* Action row */}
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.qrButton}
+                    onPress={handleQRScan}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="qr-code-outline" size={20} color="#116acf" />
+                    <Text style={styles.qrButtonText}>Scan QR</Text>
+                  </TouchableOpacity>
 
-                  {/* Action row */}
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity
-                      style={styles.qrButton}
-                      onPress={handleQRScan}
-                      activeOpacity={0.75}
+                  {/* Join Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.joinButton,
+                      isCodeComplete ? styles.joinButtonActive : styles.joinButtonDisabled,
+                    ]}
+                    onPress={handleJoinFlow}
+                    activeOpacity={0.8}
+                    disabled={!isCodeComplete || isJoining}
+                  >
+                    <LinearGradient
+                      colors={isCodeComplete ? ['#10b981', '#059669'] : ['#e7e7f3', '#e7e7f3']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.joinButtonGradient}
                     >
-                      <Ionicons name="qr-code-outline" size={20} color="#116acf" />
-                      <Text style={styles.qrButtonText}>Scan QR</Text>
-                    </TouchableOpacity>
-
-                    {/* Join Button - Changes color when code is complete */}
-                    <TouchableOpacity
-                      style={[
-                        styles.joinButton,
-                        isCodeComplete ? styles.joinButtonActive : styles.joinButtonDisabled,
-                      ]}
-                      onPress={handleJoin}
-                      activeOpacity={0.8}
-                      disabled={!isCodeComplete}
-                    >
-                      <LinearGradient
-                        colors={isCodeComplete ? ['#10b981', '#059669'] : ['#e7e7f3', '#e7e7f3']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.joinButtonGradient}
-                      >
-                        <Text
-                          style={[
-                            styles.joinButtonText,
-                            isCodeComplete ? styles.joinButtonTextActive : styles.joinButtonTextDisabled,
-                          ]}
-                        >
-                          Join
-                        </Text>
-                        <Ionicons
-                          name="arrow-forward"
-                          size={18}
-                          color={isCodeComplete ? '#ffffff' : '#a0a3b8'}
-                        />
-                      </LinearGradient>
-                    </TouchableOpacity>
-                  </View>
-                </Animated.View>
-              </Animated.View>
-            </TouchableWithoutFeedback>
+                      {isJoining ? (
+                        <ActivityIndicator color={isCodeComplete ? "#ffffff" : "#a0a3b8"} size="small" />
+                      ) : (
+                        <>
+                          <Text
+                            style={[
+                              styles.joinButtonText,
+                              isCodeComplete ? styles.joinButtonTextActive : styles.joinButtonTextDisabled,
+                            ]}
+                          >
+                            Join
+                          </Text>
+                          <Ionicons
+                            name="arrow-forward"
+                            size={18}
+                            color={isCodeComplete ? '#ffffff' : '#a0a3b8'}
+                          />
+                        </>
+                      )}
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Family Name Modal */}
+      <Modal
+        visible={showFamilyNameModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowFamilyNameModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowFamilyNameModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            
+            <Ionicons name="heart-circle-outline" size={50} color="#116acf" />
+            
+            <Text style={styles.modalTitle}>Create Your Family</Text>
+            <Text style={styles.modalSubtitle}>
+              Give your family a name to get started
+            </Text>
+
+            <TextInput
+              style={styles.familyNameInput}
+              placeholder="e.g., Smith Family"
+              placeholderTextColor="#9CA3AF"
+              value={familyName}
+              onChangeText={setFamilyName}
+              autoFocus
+              maxLength={50}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowFamilyNameModal(false);
+                  setFamilyName('');
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.createButton,
+                  !familyName.trim() && styles.createButtonDisabled,
+                ]}
+                onPress={handleCreateFamily}
+                disabled={!familyName.trim() || isCreating}
+              >
+                {isCreating ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.createButtonText}>Create Family</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Generated Code Modal */}
+      <Modal
+        visible={showGeneratedCodeModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowGeneratedCodeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, styles.codeModalContent]}>
+            <View style={styles.modalHandle} />
+            
+            <Ionicons name="checkmark-circle" size={70} color="#10b981" />
+            
+            <Text style={styles.codeModalTitle}>Family Created! 🎉</Text>
+            <Text style={styles.codeModalSubtitle}>
+              Your family &quot;{familyName}&quot; has been created
+            </Text>
+
+            <View style={styles.codeDisplayContainer}>
+              <Text style={styles.codeLabel}>Your 6-Digit Family Code</Text>
+              <Text style={styles.codeDisplay}>{generatedCode}</Text>
+              <View style={styles.qrCodeContainer}>
+                <QRCode value={`SWASTHYA_FAMILY:${generatedCode}`} size={150} />
+              </View>
+              <TouchableOpacity 
+                onPress={() => copyToClipboard(generatedCode)}
+                style={styles.copyButton}
+              >
+                <Ionicons name="copy-outline" size={20} color="#116acf" />
+                <Text style={styles.copyButtonText}>Copy Code</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.codeNote}>
+              Share this 6-digit code with family members to join your family group
+            </Text>
+
+            <TouchableOpacity
+              style={styles.continueButton}
+              onPress={() => {
+                setShowGeneratedCodeModal(false);
+                router.push('/(tabs)/home');
+              }}
+            >
+              <Text style={styles.continueButtonText}>Continue to Dashboard</Text>
+              <Ionicons name="arrow-forward" size={20} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* QR Scanner Modal */}
       <Modal
         visible={showQRScanner}
         animationType="slide"
         presentationStyle="fullScreen"
+        onRequestClose={() => setShowQRScanner(false)}
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -434,7 +599,6 @@ export default function FamilySetupScreen() {
                 <View style={styles.scanCornerBL} />
                 <View style={styles.scanCornerBR} />
               </View>
-              <View style={styles.scanLine} />
             </View>
           </CameraView>
           
@@ -443,7 +607,7 @@ export default function FamilySetupScreen() {
           </Text>
         </SafeAreaView>
       </Modal>
-    </GestureHandlerRootView>
+    </LinearGradient>
   );
 }
 
@@ -531,7 +695,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
   },
 
-  // Cards - KEPT SAME SIZE
+  // Cards
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
@@ -544,6 +708,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 24,
     elevation: 6,
+  },
+  joinCard: {
+    marginBottom: 0,
   },
   cardContent: {
     flexDirection: 'row',
@@ -679,6 +846,169 @@ const styles = StyleSheet.create({
     color: '#a0a3b8',
   },
 
+  // Family Name Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontFamily: TYPOGRAPHY.fonts.bold,
+    color: '#116acf',
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontFamily: TYPOGRAPHY.fonts.regular,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  familyNameInput: {
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontFamily: TYPOGRAPHY.fonts.regular,
+    color: '#1F2937',
+    backgroundColor: '#F9FAFB',
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F3F4F6',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontFamily: TYPOGRAPHY.fonts.medium,
+    color: '#6B7280',
+  },
+  createButton: {
+    backgroundColor: '#116acf',
+  },
+  createButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
+  createButtonText: {
+    fontSize: 16,
+    fontFamily: TYPOGRAPHY.fonts.bold,
+    color: '#ffffff',
+  },
+
+  // Generated Code Modal
+  codeModalContent: {
+    alignItems: 'center',
+  },
+  codeModalTitle: {
+    fontSize: 24,
+    fontFamily: TYPOGRAPHY.fonts.bold,
+    color: '#1F2937',
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  codeModalSubtitle: {
+    fontSize: 14,
+    fontFamily: TYPOGRAPHY.fonts.regular,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  codeDisplayContainer: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 16,
+  },
+  codeLabel: {
+    fontSize: 12,
+    fontFamily: TYPOGRAPHY.fonts.medium,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  codeDisplay: {
+    fontSize: 42,
+    fontFamily: TYPOGRAPHY.fonts.bold,
+    color: '#116acf',
+    letterSpacing: 8,
+    marginBottom: 12,
+  },
+  qrCodeContainer: {
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#E0E7FF',
+    borderRadius: 8,
+  },
+  copyButtonText: {
+    fontSize: 14,
+    fontFamily: TYPOGRAPHY.fonts.medium,
+    color: '#116acf',
+  },
+  codeNote: {
+    fontSize: 12,
+    fontFamily: TYPOGRAPHY.fonts.regular,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  continueButton: {
+    backgroundColor: '#116acf',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    width: '100%',
+  },
+  continueButtonText: {
+    fontSize: 16,
+    fontFamily: TYPOGRAPHY.fonts.bold,
+    color: '#ffffff',
+  },
+
   // QR Scanner Modal
   modalContainer: {
     flex: 1,
@@ -699,11 +1029,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontFamily: TYPOGRAPHY.fonts.bold,
-    color: '#ffffff',
   },
   camera: {
     flex: 1,
@@ -758,18 +1083,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 3,
     borderRightWidth: 3,
     borderColor: '#ffffff',
-  },
-  scanLine: {
-    position: 'absolute',
-    width: 220,
-    height: 2,
-    backgroundColor: '#00ff00',
-    borderRadius: 1,
-    opacity: 0.8,
-    shadowColor: '#00ff00',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
   },
   scanInstruction: {
     position: 'absolute',

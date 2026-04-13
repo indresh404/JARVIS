@@ -12,15 +12,16 @@ import {
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { Loader } from '@/components/ui/Loader';
+import { getCurrentPatient, getCurrentSession } from '@/services/auth.service';
 import { supabase } from '@/services/supabaseClient';
 import { useAuthStore } from '@/store/auth.store';
 
 export default function RootLayout() {
-  const setSession = useAuthStore((state) => state.setSession);
+  const setSessionState = useAuthStore((state) => state.setSessionState);
   const logout = useAuthStore((state) => state.logout);
 
   const [loaded] = useFonts({
@@ -33,22 +34,66 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    // Check current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
+    let mounted = true;
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setSession(session);
-      } else {
-        logout();
+    const hydrateAuth = async () => {
+      try {
+        const session = await getCurrentSession();
+        if (!mounted) return;
+
+        if (!session || session.user.is_anonymous) {
+          logout();
+          return;
+        }
+
+        const patient = await getCurrentPatient();
+        if (!mounted) return;
+
+        setSessionState({
+          userId: session.user.id,
+          patientId: patient?.id ?? (session.user.user_metadata?.patient_id as string | null) ?? null,
+          phoneNumber: (patient?.phone ?? session.user.user_metadata?.phone ?? null) as string | null,
+          isLoggedIn: true,
+          hasProfile: Boolean(patient),
+          hasFamilyGroup: Boolean(patient?.family_id),
+        });
+      } catch {
+        if (mounted) {
+          logout();
+        }
       }
+    };
+
+    hydrateAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+
+      if (!session) {
+        logout();
+        return;
+      }
+
+      if (session.user.is_anonymous) {
+        logout();
+        return;
+      }
+
+      setSessionState({
+        userId: session.user.id,
+        isLoggedIn: true,
+      });
+
+      void hydrateAuth();
     });
 
-    return () => subscription.unsubscribe();
-  }, [logout, setSession]);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [logout, setSessionState]);
 
   if (!loaded) return <Loader text="Loading Swasthya AI..." />;
 

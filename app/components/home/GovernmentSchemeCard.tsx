@@ -1,255 +1,143 @@
 // components/home/GovernmentSchemeCard.tsx
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
-  View,
-  Text,
   StyleSheet,
-  Dimensions,
-  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-interface Scheme {
-  id: string;
-  name: string;
-  description: string;
-  coverage: string;
-  eligibility: string;
-  icon: string;
-}
-
-const GOVERNMENT_SCHEMES: Scheme[] = [
-  {
-    id: 'pmjay',
-    name: 'PMJAY',
-    description: 'Pradhan Mantri Jan Arogya Yojana',
-    coverage: '₹5 Lakh per family',
-    eligibility: 'BPL & APL families',
-    icon: 'hospital-box',
+const COLORS = {
+  primary: '#0474FC',
+  primaryLight: '#E8F1FE',
+  text: {
+    primary: '#111827',
+    secondary: '#6B7280',
+    light: '#9CA3AF',
   },
-  {
-    id: 'nrhm',
-    name: 'NRHM',
-    description: 'National Rural Health Mission',
-    coverage: 'Basic health services',
-    eligibility: 'Rural population',
-    icon: 'heart-pulse',
-  },
-  {
-    id: 'nhm',
-    name: 'NHM',
-    description: 'National Health Mission',
-    coverage: 'Comprehensive health',
-    eligibility: 'All citizens',
-    icon: 'shield-heart',
-  },
-];
+};
 
-interface GovernmentSchemeCardProps {
-  onSchemePress?: (scheme: Scheme) => void;
-}
+export const GovernmentSchemeCard = ({ scheme, onPress }: any) => {
+  // Default scheme if none provided
+  const defaultScheme = {
+    name: 'Ayushman Bharat - PMJAY',
+    department: 'Ministry of Health & Family Welfare',
+    description: 'Health insurance scheme providing coverage up to ₹5 lakhs per family per year for secondary and tertiary care hospitalization.',
+    benefit: 'Cashless treatment up to ₹5 lakhs',
+    eligibility: 'Family income below ₹2.5 lakhs per year'
+  };
 
-export const GovernmentSchemeCard: React.FC<GovernmentSchemeCardProps> = ({ onSchemePress }) => {
+  const currentScheme = scheme || defaultScheme;
+
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerIcon}>
-          <MaterialCommunityIcons name="leaf" size={16} color="#10b981" />
-        </View>
-        <Text style={styles.headerTitle}>Available Health Schemes</Text>
-      </View>
-
-      {/* Schemes List */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        scrollEventThrottle={16}
-        style={styles.schemesList}
-      >
-        {GOVERNMENT_SCHEMES.map((scheme) => (
+    <TouchableOpacity onPress={onPress} style={styles.card}>
+      <View style={styles.cardHeader}>
+        <View style={styles.iconContainer}>
           <LinearGradient
-            key={scheme.id}
-            colors={['#064e3b', '#065f46', '#047857']}
+            colors={[COLORS.primary, COLORS.primary + 'CC']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.schemeCard}
+            style={styles.iconGradient}
           >
-            {/* Top accent bar */}
-            <View style={styles.schemeAccent} />
-
-            {/* Icon */}
-            <View style={styles.schemeIconContainer}>
-              <MaterialCommunityIcons
-                name={scheme.icon as any}
-                size={32}
-                color="#10b981"
-              />
-            </View>
-
-            {/* Content */}
-            <View style={styles.schemeContent}>
-              <Text style={styles.schemeName}>{scheme.name}</Text>
-              <Text style={styles.schemeDescription}>{scheme.description}</Text>
-              
-              <View style={styles.schemeDetails}>
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Coverage</Text>
-                  <Text style={styles.detailValue}>{scheme.coverage}</Text>
-                </View>
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Eligibility</Text>
-                  <Text style={styles.detailValue}>{scheme.eligibility}</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Border */}
-            <View style={styles.schemeBorder} />
+            <Ionicons name="medal-outline" size={24} color="#FFFFFF" />
           </LinearGradient>
-        ))}
-      </ScrollView>
-
-      {/* Info Footer */}
-      <View style={styles.footer}>
-        <View style={styles.footerContent}>
-          <MaterialCommunityIcons name="information" size={14} color="#10b981" />
-          <Text style={styles.footerText}>
-            Your profile is matched with these schemes based on eligibility
-          </Text>
         </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.schemeName}>{currentScheme.name}</Text>
+          <Text style={styles.department}>{currentScheme.department || 'Government of India'}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={COLORS.text.light} />
       </View>
-    </View>
+      
+      {currentScheme.description ? (
+        <Text style={styles.description} numberOfLines={2}>
+          {currentScheme.description}
+        </Text>
+      ) : null}
+      
+      <View style={styles.cardFooter}>
+        <View style={styles.tag}>
+          <Ionicons name="cash-outline" size={14} color={COLORS.primary} />
+          <Text style={styles.tagText}>{currentScheme.benefit || 'Financial Benefit'}</Text>
+        </View>
+        {currentScheme.eligibility ? (
+          <View style={styles.tag}>
+            <Ionicons name="people-outline" size={14} color={COLORS.primary} />
+            <Text style={styles.tagText}>
+              {typeof currentScheme.eligibility === 'string' ? currentScheme.eligibility.substring(0, 30) : String(currentScheme.eligibility)}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    </TouchableOpacity>
   );
 };
 
-const { width } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
-  container: {
-    marginVertical: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  headerIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ffffff',
-    letterSpacing: 0.3,
-  },
-  schemesList: {
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  schemeCard: {
-    width: width * 0.75,
+  card: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  iconContainer: {
     marginRight: 12,
-    position: 'relative',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
   },
-  schemeAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: '#10b981',
-  },
-  schemeIconContainer: {
+  iconGradient: {
     width: 48,
     height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    justifyContent: 'center',
+    borderRadius: 24,
     alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
+    justifyContent: 'center',
   },
-  schemeContent: {
-    zIndex: 2,
+  cardContent: {
+    flex: 1,
   },
   schemeName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text.primary,
     marginBottom: 4,
   },
-  schemeDescription: {
-    fontSize: 11,
-    color: '#d1d5db',
+  department: {
+    fontSize: 12,
+    color: COLORS.text.secondary,
+  },
+  description: {
+    fontSize: 13,
+    color: COLORS.text.secondary,
+    lineHeight: 18,
     marginBottom: 12,
-    fontWeight: '500',
   },
-  schemeDetails: {
-    gap: 10,
-  },
-  detailItem: {
+  cardFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  tag: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(16, 185, 129, 0.2)',
-  },
-  detailLabel: {
-    fontSize: 10,
-    color: '#9ca3af',
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  detailValue: {
-    fontSize: 11,
-    color: '#10b981',
-    fontWeight: '700',
-  },
-  schemeBorder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    borderRadius: 16,
-  },
-  footer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.1)',
+    gap: 4,
   },
-  footerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  footerText: {
+  tagText: {
     fontSize: 11,
-    color: '#d1d5db',
     fontWeight: '500',
-    flex: 1,
+    color: COLORS.primary,
   },
 });

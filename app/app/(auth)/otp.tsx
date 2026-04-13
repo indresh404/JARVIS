@@ -1,10 +1,11 @@
-import { supabase } from '@/services/supabaseClient';
+// app/(auth)/otp.tsx
 import { useAuthStore } from '@/store/auth.store';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { getPatientByPhone, normalizePhone, getStoredOTP, clearStoredOTP } from '@/services/auth.service';
 
 // Define colors directly (no external imports)
 const COLORS = {
@@ -38,16 +39,47 @@ const TYPOGRAPHY = {
 
 export default function OTPVerifyScreen() {
   const router = useRouter();
+  const setSessionState = useAuthStore((state) => state.setSessionState);
   const params = useLocalSearchParams();
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
-  const inputs = useRef<Array<TextInput | null>>([]);
   const [timer, setTimer] = useState(30);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [displayOTP, setDisplayOTP] = useState<string>(''); // For dev testing
+  const inputs = useRef<Array<TextInput | null>>([]);
 
-  // Get phone number from navigation params
-  const phoneNumber = params.phone as string || '+91 XXXXX XXXXX';
-  const formattedPhone = phoneNumber.startsWith('+91') ? phoneNumber : `+91 ${phoneNumber}`;
+  const phoneNumber = normalizePhone((params.phone as string) || '');
+  const formattedPhone = phoneNumber ? `+91 ${phoneNumber}` : '+91 XXXXX XXXXX';
 
+  // Load and auto-fill OTP on mount
+  useEffect(() => {
+    const loadOTP = async () => {
+      try {
+        const storedOtp = await getStoredOTP(phoneNumber);
+        console.log('Loaded OTP for phone', phoneNumber, ':', storedOtp);
+        
+        if (storedOtp) {
+          setDisplayOTP(storedOtp); // Show for dev testing
+          const otpDigits = storedOtp.split('');
+          setCode(otpDigits);
+          console.log('Auto-filled OTP:', otpDigits);
+        } else {
+          console.log('No OTP found for phone:', phoneNumber);
+          Alert.alert('Error', 'OTP not found. Please try logging in again.');
+          router.back();
+        }
+      } catch (error) {
+        console.error('Error loading OTP:', error);
+      }
+    };
+
+    if (phoneNumber) {
+      loadOTP();
+    }
+  }, [phoneNumber]);
+
+  // Timer for OTP expiry
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (timer > 0) {
@@ -58,7 +90,7 @@ export default function OTPVerifyScreen() {
     return () => clearInterval(interval);
   }, [timer]);
 
-  // Auto-focus first input on mount
+  // Focus first input on mount
   useEffect(() => {
     setTimeout(() => {
       inputs.current[0]?.focus();
@@ -70,12 +102,10 @@ export default function OTPVerifyScreen() {
     newCode[index] = text;
     setCode(newCode);
 
-    // Auto-advance to next box on input
     if (text !== '' && index < 5) {
       inputs.current[index + 1]?.focus();
     }
 
-    // Auto-submit when all digits are filled
     if (text !== '' && index === 5 && newCode.every(digit => digit !== '')) {
       setTimeout(() => {
         handleVerify();
@@ -84,7 +114,6 @@ export default function OTPVerifyScreen() {
   };
 
   const handleKeyPress = (e: any, index: number) => {
-    // Handle backspace to go to previous box
     if (e.nativeEvent.key === 'Backspace' && index > 0 && code[index] === '') {
       inputs.current[index - 1]?.focus();
     }
@@ -98,82 +127,134 @@ export default function OTPVerifyScreen() {
     Keyboard.dismiss();
     const otpCode = code.join('');
 
+    console.log('=== OTP Verification Started ===');
+    console.log('Entered OTP:', otpCode);
+    console.log('Phone Number:', phoneNumber);
+
     if (otpCode.length !== 6) {
       Alert.alert('Error', 'Please enter the complete 6-digit OTP');
       return;
     }
 
+    setIsVerifying(true);
+
     try {
-      // MOCK BYPASS: Check for magic code '123456'
-      if (otpCode !== '123456') {
-        Alert.alert('Verification Failed', 'Invalid OTP. Use 123456 for demo.');
+      // Get the stored OTP for verification
+      const storedOtp = await getStoredOTP(phoneNumber);
+      console.log('Stored OTP:', storedOtp);
+      console.log('Verification - Entered:', otpCode, 'Stored:', storedOtp, 'Match:', otpCode === storedOtp);
+
+      if (!storedOtp) {
+        Alert.alert('OTP Expired', 'Your OTP has expired. Please request a new one.');
+        setCode(['', '', '', '', '', '']);
+        inputs.current[0]?.focus();
+        setIsVerifying(false);
         return;
       }
 
-      // 1. Check if user exists in our 'users' table by phone
-      let { data: userProfile, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('phone', `+91${phoneNumber}`)
-        .single();
-
-      // 2. If not, auto-signup (create record)
-      if (!userProfile) {
-        const { data: newUser, error: createError } = await supabase
-          .from('users')
-          .insert([{ 
-            phone: `+91${phoneNumber}`,
-            name: `User ${phoneNumber.slice(-4)}`
-          }])
-          .select()
-          .single();
-        
-        if (createError) {
-          Alert.alert('Registration Failed', createError.message);
-          return;
-        }
-        userProfile = newUser;
+      // Verify the entered OTP matches the stored one
+      if (otpCode !== storedOtp) {
+        console.log('OTP Mismatch!');
+        Alert.alert('Verification Failed', 'Invalid OTP. Please try again.');
+        setCode(['', '', '', '', '', '']);
+        inputs.current[0]?.focus();
+        setIsVerifying(false);
+        return;
       }
 
-      // 3. Manually create a mock session to satisfy the app state
-      const mockSession = {
-        access_token: 'mock-token',
-        refresh_token: 'mock-refresh',
-        expires_in: 3600,
-        token_type: 'bearer',
-        user: {
-          id: userProfile.id,
-          phone: userProfile.phone,
-          email: '',
-          app_metadata: {},
-          user_metadata: {},
-          aud: 'authenticated',
-          created_at: new Date().toISOString()
+      console.log('OTP Verified Successfully!');
+
+      // Clear the stored OTP after successful verification
+      await clearStoredOTP();
+
+      // Check if patient already exists
+      const existingPatient = await getPatientByPhone(phoneNumber);
+      console.log('Patient found:', existingPatient?.id);
+
+      if (existingPatient) {
+        // Existing user - update auth state and route
+        setSessionState({
+          userId: existingPatient.id,
+          patientId: existingPatient.id,
+          phoneNumber,
+          isLoggedIn: true,
+          hasProfile: Boolean(existingPatient.age && existingPatient.gender),
+          hasFamilyGroup: Boolean(existingPatient.family_id),
+        });
+
+        console.log('Existing user logged in:', existingPatient.id);
+
+        if (existingPatient.family_id) {
+          console.log('Routing to home (has family)');
+          router.replace('/(tabs)/home');
+        } else if (existingPatient.age && existingPatient.gender) {
+          console.log('Routing to family setup (has profile)');
+          router.replace('/(onboarding)/family-setup');
+        } else {
+          console.log('Routing to user details (incomplete profile)');
+          router.replace({
+            pathname: '/(onboarding)/user-details',
+            params: { phone: phoneNumber },
+          });
         }
-      };
-
-      // @ts-ignore - injecting mock session into store
-      useAuthStore.getState().setSession(mockSession);
-
-      // 4. Navigate based on profile completion
-      if (userProfile.name && userProfile.name !== `User ${phoneNumber.slice(-4)}`) {
-        useAuthStore.getState().setHasProfile(true);
-        router.replace('/(tabs)/home');
       } else {
-        useAuthStore.getState().setHasProfile(false);
-        router.replace('/(onboarding)/user-details');
+        // New user - create temporary auth state and route to profile setup
+        console.log('New user detected, routing to profile setup');
+        
+        setSessionState({
+          userId: phoneNumber, // Use phone as temp ID
+          patientId: phoneNumber,
+          phoneNumber,
+          isLoggedIn: true,
+          hasProfile: false,
+          hasFamilyGroup: false,
+        });
+
+        router.replace({
+          pathname: '/(onboarding)/user-details',
+          params: { phone: phoneNumber },
+        });
       }
-    } catch (error) {
-      Alert.alert('Connection Error', 'Could not reach Supabase');
+    } catch (error: any) {
+      console.error('Error verifying OTP:', error);
+      Alert.alert('Verification Failed', error?.message || 'Failed to verify OTP. Please try again.');
+      
+      // Clear OTP on failure
+      setCode(['', '', '', '', '', '']);
+      inputs.current[0]?.focus();
+    } finally {
+      setIsVerifying(false);
     }
   };
 
-  const handleResendOTP = () => {
-    setTimer(30);
-    Alert.alert('OTP Resent', `A new OTP has been sent to ${formattedPhone}`);
-    // Clear existing OTP
-    setCode(['', '', '', '', '', '']);
-    inputs.current[0]?.focus();
+  const handleResendOTP = async () => {
+    setIsResending(true);
+    console.log('=== Resending OTP ===');
+    
+    try {
+      // Generate new random OTP
+      const { generateRandomOTP, storeOTPLocally } = await import('@/services/auth.service');
+      const newOtp = generateRandomOTP();
+      console.log('Generated new OTP:', newOtp);
+      
+      await storeOTPLocally(phoneNumber, newOtp);
+      console.log('New OTP stored');
+      
+      // Update display
+      setDisplayOTP(newOtp);
+      
+      // Reset timer and form
+      setTimer(30);
+      setCode(['', '', '', '', '', '']);
+      inputs.current[0]?.focus();
+      
+      Alert.alert('OTP Resent', `A new verification code has been sent to ${formattedPhone}`);
+      setIsResending(false);
+    } catch (error: any) {
+      console.error('Error resending OTP:', error);
+      Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+      setIsResending(false);
+    }
   };
 
   return (
@@ -186,7 +267,7 @@ export default function OTPVerifyScreen() {
           {/* Back Button */}
           <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.7}>
             <View style={styles.backButtonBg}>
-              <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
+              <Ionicons name="arrow-back" size={24} color={COLORS.primary || '#2563EB'} />
             </View>
           </TouchableOpacity>
 
@@ -199,15 +280,23 @@ export default function OTPVerifyScreen() {
             <Text style={styles.phoneNumber}>{formattedPhone}</Text>
           </View>
 
-          {/* OTP Inputs - 6 Individual White Square Boxes with Blue Gradient Border */}
+          {/* Dev OTP Display */}
+          {displayOTP && (
+            <View style={styles.otpDisplayBox}>
+              <Text style={styles.otpDisplayLabel}>OTP Code (auto-filled below):</Text>
+              <Text style={styles.otpDisplayValue}>{displayOTP}</Text>
+            </View>
+          )}
+
+          {/* OTP Inputs */}
           <View style={styles.otpContainer}>
             {code.map((digit, index) => (
               <View key={index} style={styles.otpBoxWrapper}>
                 <LinearGradient
                   colors={
                     focusedIndex === index || digit !== ''
-                      ? ['#2563EB', '#3B82F6', '#60A5FA']  // Blue gradient when focused/filled
-                      : ['#E2E8F0', '#E2E8F0', '#E2E8F0']   // Gray gradient when empty
+                      ? ['#2563EB', '#3B82F6', '#60A5FA']
+                      : ['#E2E8F0', '#E2E8F0', '#E2E8F0']
                   }
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
@@ -237,25 +326,34 @@ export default function OTPVerifyScreen() {
             {timer > 0 ? (
               <Text style={styles.timerText}>Resend code in {timer}s</Text>
             ) : (
-              <TouchableOpacity onPress={handleResendOTP} activeOpacity={0.7}>
-                <Text style={styles.resendText}>Resend OTP</Text>
+              <TouchableOpacity onPress={handleResendOTP} disabled={isResending} activeOpacity={0.7}>
+                {isResending ? (
+                  <ActivityIndicator size="small" color="#2563EB" />
+                ) : (
+                  <Text style={styles.resendText}>Resend OTP</Text>
+                )}
               </TouchableOpacity>
             )}
           </View>
 
-          {/* Spacer */}
           <View style={{ flex: 1 }} />
 
-          {/* Verify Button with Gradient */}
-          <TouchableOpacity onPress={handleVerify} activeOpacity={0.8}>
+          {/* Verify Button */}
+          <TouchableOpacity onPress={handleVerify} activeOpacity={0.8} disabled={isVerifying}>
             <LinearGradient
-              colors={['#2563EB', '#3B82F6', '#60A5FA']}  // Blue gradient matching login page
+              colors={['#2563EB', '#3B82F6', '#60A5FA']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.verifyButton}
             >
-              <Text style={styles.verifyButtonText}>Verify</Text>
-              <Ionicons name="checkmark-circle" size={22} color="#fff" />
+              {isVerifying ? (
+                <ActivityIndicator color="#ffffff" size="small" />
+              ) : (
+                <>
+                  <Text style={styles.verifyButtonText}>Verify</Text>
+                  <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                </>
+              )}
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -267,7 +365,7 @@ export default function OTPVerifyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',  // Light background matching login page
+    backgroundColor: '#F8FAFC',
   },
   keyboardView: {
     flex: 1,
@@ -309,20 +407,20 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.fonts.bold,
     fontSize: 28,
     fontWeight: '700',
-    color: '#1E3A8A',  // Dark blue matching login page
+    color: '#1E3A8A',
     marginBottom: 8,
   },
   subtitle: {
     fontFamily: TYPOGRAPHY.fonts.regular,
     fontSize: 14,
-    color: '#64748B',  // Muted text color
+    color: '#64748B',
     marginBottom: 4,
   },
   phoneNumber: {
     fontFamily: TYPOGRAPHY.fonts.semibold,
     fontSize: 18,
     fontWeight: '600',
-    color: '#1E293B',  // Dark text color
+    color: '#1E293B',
     marginTop: 4,
   },
   otpContainer: {
@@ -374,7 +472,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: TYPOGRAPHY.fonts.semibold,
     fontWeight: '600',
-    color: '#2563EB',  // Blue color matching login page
+    color: '#2563EB',
   },
   verifyButton: {
     flexDirection: 'row',
@@ -400,5 +498,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: TYPOGRAPHY.fonts.semibold,
     fontWeight: '600',
+  },
+  otpDisplayBox: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FBBF24',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  otpDisplayLabel: {
+    fontSize: 12,
+    fontFamily: TYPOGRAPHY.fonts.regular,
+    color: '#92400E',
+    marginBottom: 6,
+  },
+  otpDisplayValue: {
+    fontSize: 24,
+    fontFamily: TYPOGRAPHY.fonts.bold,
+    fontWeight: '700',
+    color: '#D97706',
+    letterSpacing: 4,
   },
 });

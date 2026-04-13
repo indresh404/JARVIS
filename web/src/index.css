@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-brand-primary: #116acf;
+  --color-brand-primary-light: #4db8d9;
+  --color-brand-surface: #F0F8FF;
+  
+  --color-risk-low: #10B981;
+  --color-risk-moderate: #EAB308;
+  --color-risk-elevated: #F97316;
+  --color-risk-high: #EF4444;
+
+  --color-text-primary: #1a1a2e;
+  --color-text-secondary: #374151;
+  --color-text-muted: #6B7280;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-surface text-text-primary font-sans;
+  }
+}
+
+@layer components {
+  .card-base {
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm transition-all duration-150;
+  }
+  .card-interactive {
+    @apply cursor-pointer hover:shadow-md hover:border-brand-primary-light;
+  }
+}

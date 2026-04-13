@@ -4,8 +4,10 @@ import { SkeletonCheckInScreen } from '@/components/ui/SkeletonLoader';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSegments } from 'expo-router';
-import React, { useState } from 'react';
-import { Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
+import { getPendingCheckins, submitCheckin } from '@/services/supabase.service';
+import { useAuthStore } from '@/store/auth.store';
 
 const TopNavBar = ({ 
   onScanPress, 
@@ -29,12 +31,7 @@ const TopNavBar = ({
     <View style={styles.topNavContainer}>
       <View style={styles.topNavBar}>
         <TouchableOpacity activeOpacity={0.8} onPress={onScanPress} style={styles.leftButton}>
-          <LinearGradient
-            colors={['#0474FC', '#0360D0']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.gradientButton}
-          >
+          <LinearGradient colors={['#0474FC', '#0360D0']} style={styles.gradientButton}>
             <Ionicons name="scan-outline" size={22} color="#FFFFFF" />
           </LinearGradient>
         </TouchableOpacity>
@@ -78,26 +75,48 @@ export default function CheckinScreen() {
   const segments = useSegments();
   const currentRoute = segments[segments.length - 1];
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [answers, setAnswers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Skeleton loading timeout: 4 seconds fixed duration
-  const SKELETON_DURATION = 4000; // 4 seconds
-  const MAX_SKELETON_TIME = 240000; // 4 minutes max timeout
+  const { user } = useAuthStore();
+  const patientId = user?.id;
+
+  useEffect(() => {
+    if (patientId) {
+      loadQuestions();
+    }
+  }, [patientId]);
+  const loadQuestions = async () => {
+    try {
+      if (!patientId) return;
+      const data = await getPendingCheckins(patientId);
+      setQuestions(data);
+      setAnswers(data.map((q: any) => ({ question_id: q.id, answer: '' })));
+    } catch (error) {
+      console.error("Check-in error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAnswer = (questionId: string, text: string) => {
+    setAnswers(prev => prev.map(a => a.question_id === questionId ? { ...a, answer: text } : a));
+  };
+
+  const handleSubmit = async () => {
+    try {
+      if (!patientId) return;
+      await submitCheckin(patientId, answers);
+      Alert.alert("Success", "Check-in completed!");
+      setQuestions([]);
+    } catch (error) {
+      Alert.alert("Error", "Failed to submit");
+    }
+  };
 
   const handleIntroComplete = () => {
-    // Hide skeleton after fixed 4 seconds duration
-    const skeletonTimeout = setTimeout(() => {
-      setIsDataLoaded(true);
-    }, SKELETON_DURATION);
-
-    // Safety: force show content after 4 minutes max
-    const maxTimeoutTimer = setTimeout(() => {
-      setIsDataLoaded(true);
-    }, MAX_SKELETON_TIME);
-
-    return () => {
-      clearTimeout(skeletonTimeout);
-      clearTimeout(maxTimeoutTimer);
-    };
+    setIsDataLoaded(true);
   };
   
   return (
@@ -113,16 +132,55 @@ export default function CheckinScreen() {
       />
       <ScreenIntroGate
         loaderText="Preparing your check-in experience..."
-        loaderDuration={3000}
+        loaderDuration={2000}
         backgroundColor="#F9FAFB"
         onIntroComplete={handleIntroComplete}
       >
-        {!isDataLoaded ? (
+        {!isDataLoaded || loading ? (
           <SkeletonCheckInScreen />
         ) : (
           <ScrollView contentContainerStyle={styles.scrollContent}>
-            <Text style={styles.title}>Check-in Screen</Text>
-            <Text style={styles.subtitle}>Your health check-in will appear here</Text>
+            <View style={styles.header}>
+              <Text style={styles.title}>Daily Health Check-in</Text>
+              <Text style={styles.subtitle}>Help us track your progress</Text>
+            </View>
+
+            {questions.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="checkmark-done-circle-outline" size={80} color="#10B981" />
+                <Text style={styles.emptyTitle}>You're all set!</Text>
+                <Text style={styles.emptySubtitle}>No pending questions for today.</Text>
+              </View>
+            ) : (
+              <View>
+                {questions.map((q) => (
+                  <View key={q.id} style={styles.questionCard}>
+                    <Text style={styles.questionText}>{q.question_text}</Text>
+                    <View style={styles.optionsContainer}>
+                      {['Feeling Great', 'Okay', 'Not Good'].map(option => (
+                        <TouchableOpacity 
+                          key={option}
+                          style={[
+                            styles.optionButton,
+                            answers.find(a => a.question_id === q.id)?.answer === option && styles.optionButtonActive
+                          ]}
+                          onPress={() => handleAnswer(q.id, option)}
+                        >
+                          <Text style={[
+                            styles.optionText,
+                            answers.find(a => a.question_id === q.id)?.answer === option && styles.optionTextActive
+                          ]}>{option}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+                
+                <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+                  <Text style={styles.submitButtonText}>Complete Check-in</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </ScrollView>
         )}
       </ScreenIntroGate>
@@ -150,6 +208,85 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#6B7280',
+  },
+  header: {
+    marginBottom: 20,
+    width: '100%',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  questionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  questionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  optionsContainer: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  optionButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+  },
+  optionButtonActive: {
+    borderColor: '#0474FC',
+    backgroundColor: '#E8F1FE',
+  },
+  optionText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#4B5563',
+  },
+  optionTextActive: {
+    color: '#0474FC',
+    fontWeight: '600',
+  },
+  submitButton: {
+    backgroundColor: '#0474FC',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 40,
+    width: '100%',
+  },
+  submitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   // Top Navigation Bar Styles
   topNavContainer: {

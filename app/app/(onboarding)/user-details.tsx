@@ -16,8 +16,9 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
-// Make sure this path matches your project structure
 import { COLORS, STYLES } from '../../constants/Colors';
+import { supabase } from '@/services/supabaseClient';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function UserDetailsScreen() {
   const router = useRouter();
@@ -230,21 +231,38 @@ export default function UserDetailsScreen() {
     });
 
     if (validateForm()) {
-      // Save user data
-      const userData = {
+      saveProfile();
+    }
+  };
+
+
+  const saveProfile = async () => {
+    const { user } = useAuthStore.getState();
+    if (!user) {
+      Alert.alert('Error', 'No authenticated user found');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('users').upsert({
+        id: user.id,
         name: name.trim(),
         age: parseInt(age),
-        phoneNumber: phoneNumber.trim(),
-        gender,
-        location: location.trim(),
-        createdAt: new Date().toISOString()
-      };
+        phone: phoneNumber.trim(),
+        gender: gender,
+        state: location.trim(),
+        updated_at: new Date().toISOString(),
+      });
 
-      console.log('User Data:', userData);
+      if (error) {
+        Alert.alert('Error Saving Profile', error.message);
+        return;
+      }
 
-      // TODO: Save to AsyncStorage or your backend
-      // For now, just navigate to next screen
+      useAuthStore.getState().setHasProfile(true);
       router.push('/(onboarding)/family-setup');
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred while saving your profile');
     }
   };
 

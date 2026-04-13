@@ -1,0 +1,91 @@
+{
+  "name": "Safety Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-8am",
+      "name": "Schedule — 8AM Check-in",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 100]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-6hourly",
+      "name": "Schedule — 6-hourly Wearable",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "safety-alert",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/doctor_alerts",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "patient_id", "value": "={{$json.patient_id}}" },
+            { "name": "risk_score", "value": "={{$json.risk_score}}" },
+            { "name": "risk_level", "value": "={{$json.risk_level}}" },
+            { "name": "risk_reason", "value": "={{$json.risk_reason}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "supabase-alert",
+      "name": "Supabase — /doctor_alerts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 700]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Supabase — /doctor_alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null,
+  "meta": {
+    "templateId": null
+  },
+  "pinData": {}
+}

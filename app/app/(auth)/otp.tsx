@@ -1,10 +1,40 @@
-import { COLORS, TYPOGRAPHY } from '@/theme';
+import { supabase } from '@/services/supabaseClient';
+import { useAuthStore } from '@/store/auth.store';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
+// Define colors directly (no external imports)
+const COLORS = {
+  primary: '#3B82F6',
+  surface: '#F8FAFC',
+  white: '#FFFFFF',
+  blue: {
+    500: '#3B82F6',
+    900: '#1E3A8A',
+  },
+  gray: {
+    300: '#D1D5DB',
+    400: '#9CA3AF',
+    500: '#6B7280',
+  },
+  text: {
+    primary: '#1F2937',
+    secondary: '#4B5563',
+    muted: '#6B7280',
+  },
+};
+
+const TYPOGRAPHY = {
+  fonts: {
+    regular: 'System',
+    medium: 'System',
+    semibold: 'System',
+    bold: 'System',
+  },
+};
 
 export default function OTPVerifyScreen() {
   const router = useRouter();
@@ -68,28 +98,73 @@ export default function OTPVerifyScreen() {
     Keyboard.dismiss();
     const otpCode = code.join('');
 
-    if (otpCode.length !== 5) {
+    if (otpCode.length !== 6) {
       Alert.alert('Error', 'Please enter the complete 6-digit OTP');
       return;
     }
 
-    // Simulate OTP verification
-    // In production, verify with your backend/Supabase
+    try {
+      // MOCK BYPASS: Check for magic code '123456'
+      if (otpCode !== '123456') {
+        Alert.alert('Verification Failed', 'Invalid OTP. Use 123456 for demo.');
+        return;
+      }
 
-    // After OTP verification, check if user has profile in Supabase
-    // const { data: profile } = await supabase
-    //   .from('profiles')
-    //   .select('*')
-    //   .eq('user_id', userId)
-    //   .single();
+      // 1. Check if user exists in our 'users' table by phone
+      let { data: userProfile, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('phone', `+91${phoneNumber}`)
+        .single();
 
-    // Simulate checking profile existence
-    const hasProfile = false; // Replace with actual Supabase check
+      // 2. If not, auto-signup (create record)
+      if (!userProfile) {
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert([{ 
+            phone: `+91${phoneNumber}`,
+            name: `User ${phoneNumber.slice(-4)}`
+          }])
+          .select()
+          .single();
+        
+        if (createError) {
+          Alert.alert('Registration Failed', createError.message);
+          return;
+        }
+        userProfile = newUser;
+      }
 
-    if (hasProfile) {
-      router.replace('/(tabs)/home');
-    } else {
-      router.replace('/(onboarding)/user-details');
+      // 3. Manually create a mock session to satisfy the app state
+      const mockSession = {
+        access_token: 'mock-token',
+        refresh_token: 'mock-refresh',
+        expires_in: 3600,
+        token_type: 'bearer',
+        user: {
+          id: userProfile.id,
+          phone: userProfile.phone,
+          email: '',
+          app_metadata: {},
+          user_metadata: {},
+          aud: 'authenticated',
+          created_at: new Date().toISOString()
+        }
+      };
+
+      // @ts-ignore - injecting mock session into store
+      useAuthStore.getState().setSession(mockSession);
+
+      // 4. Navigate based on profile completion
+      if (userProfile.name && userProfile.name !== `User ${phoneNumber.slice(-4)}`) {
+        useAuthStore.getState().setHasProfile(true);
+        router.replace('/(tabs)/home');
+      } else {
+        useAuthStore.getState().setHasProfile(false);
+        router.replace('/(onboarding)/user-details');
+      }
+    } catch (error) {
+      Alert.alert('Connection Error', 'Could not reach Supabase');
     }
   };
 

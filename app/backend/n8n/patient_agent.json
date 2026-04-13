@@ -1,0 +1,760 @@
+{
+  "name": "Swasthya — Patient Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "3eebc991-a43b-494f-9f16-0bcafafa308b",
+      "name": "Webhook — Patient Chat",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-1600, 300],
+      "webhookId": "swasthya-patient-chat"
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.endChat}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "6355894d-aa91-4280-b8f1-2bc0c3003bc3",
+      "name": "IF — End Chat?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [-1380, 300]
+    },
+
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/patients?patient_id=eq.{{$node[\"Webhook — Patient Chat\"].json.patient_id}}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "23cdfd54-f654-4ea7-8c13-ae0144362aff",
+      "name": "Supabase — GET Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-1120, 160]
+    },
+
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/pending_checkin_questions?patient_id=eq.{{$node[\"Webhook — Patient Chat\"].json.patient_id}}&status=eq.pending",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5f8372b5-762a-410a-957e-037d2226749e",
+      "name": "Supabase — GET Pending Questions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-1120, 320]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/chat/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": \"{{$node[\"Webhook — Patient Chat\"].json.message}}\",\n  \"patient_id\": \"{{$node[\"Webhook — Patient Chat\"].json.patient_id}}\",\n  \"session_id\": \"{{$node[\"Webhook — Patient Chat\"].json.session_id}}\",\n  \"patient_context\": {\n    \"rolling_summary\": \"{{$node[\"Supabase — GET Profile\"].json[0].rolling_summary}}\",\n    \"profile_summary\": \"{{$node[\"Supabase — GET Profile\"].json[0].profile_summary}}\",\n    \"last_7_summaries\": {{$node[\"Supabase — GET Profile\"].json[0].last_7_summaries || []}},\n    \"active_medications\": {{$node[\"Supabase — GET Profile\"].json[0].medications || []}},\n    \"pending_doctor_questions\": {{$node[\"Supabase — GET Pending Questions\"].json || []}}\n  }\n}",
+        "options": {}
+      },
+      "id": "4166d781-8156-41ae-959e-cc440b3f1196",
+      "name": "Python — /chat/message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-880, 240]
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.save_ready}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "267b7cd8-1074-4db1-85a5-44478a6f1de3",
+      "name": "IF — Save Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [-660, 240]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/symptoms",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "patient_id", "value": "={{$node[\"Webhook — Patient Chat\"].json.patient_id}}" },
+            { "name": "symptom_name", "value": "={{$node[\"Python — /chat/message\"].json.extracted_symptom.symptom}}" },
+            { "name": "body_zone", "value": "={{$node[\"Python — /chat/message\"].json.extracted_symptom.body_zone}}" },
+            { "name": "severity", "value": "={{$node[\"Python — /chat/message\"].json.extracted_symptom.severity}}" },
+            { "name": "onset", "value": "={{$node[\"Python — /chat/message\"].json.extracted_symptom.onset}}" },
+            { "name": "session_id", "value": "={{$node[\"Webhook — Patient Chat\"].json.session_id}}" },
+            { "name": "created_at", "value": "={{$now}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1b5a9a5a-21db-46c9-8c20-96794c9f4ecc",
+      "name": "Supabase — POST Symptom",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-440, 120]
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$node[\"Python — /chat/message\"].json.extracted_symptom?.pending_question_id}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "pending-question-if",
+      "name": "IF — Pending Question?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [-220, 120]
+    },
+
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/pending_checkin_questions?id=eq.{{$node[\"Python — /chat/message\"].json.extracted_symptom.pending_question_id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"patient_answer\": \"{{$node[\"Python — /chat/message\"].json.extracted_symptom.symptom}}\",\n  \"status\": \"answered\",\n  \"answered_at\": \"{{$now}}\"\n}",
+        "options": {}
+      },
+      "id": "patch-pending-question",
+      "name": "Supabase — PATCH Answered Question",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-0, 60]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/agent/escalate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"symptoms\": [{{$node[\"Python — /chat/message\"].json.extracted_symptom || {}}}],\n  \"patient_conditions\": {{$node[\"Supabase — GET Profile\"].json[0].conditions || []}},\n  \"age\": {{$node[\"Supabase — GET Profile\"].json[0].age || 0}},\n  \"wearable_flags\": {{$node[\"Supabase — GET Profile\"].json[0].wearable_flags || []}},\n  \"message_context\": \"{{$node[\"Webhook — Patient Chat\"].json.message}}\"\n}",
+        "options": {}
+      },
+      "id": "5608cfd4-1a48-4745-8c8c-88432f749799",
+      "name": "Python — /agent/escalate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 240]
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.escalation_level}}",
+              "value2": "HOME_MONITORING",
+              "operation": "notEqual"
+            }
+          ]
+        }
+      },
+      "id": "escalation-fired-if",
+      "name": "IF — Escalation Fired?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [440, 240]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.N8N_INTERNAL_URL}}/webhook/safety-agent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"patient_id\": \"{{$node[\"Webhook — Patient Chat\"].json.patient_id}}\",\n  \"trigger\": \"escalation\",\n  \"escalation_level\": \"{{$node[\"Python — /agent/escalate\"].json.escalation_level}}\",\n  \"triggered_by\": \"{{$node[\"Python — /agent/escalate\"].json.triggered_by}}\",\n  \"reasoning\": \"{{$node[\"Python — /agent/escalate\"].json.reasoning}}\"\n}",
+        "options": {}
+      },
+      "id": "trigger-safety-escalation",
+      "name": "Webhook — Trigger Safety (Escalation)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 160]
+    },
+
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"reply\": \"{{$node[\"Python — /chat/message\"].json.bot_reply}}\",\n  \"session_id\": \"{{$node[\"Webhook — Patient Chat\"].json.session_id}}\",\n  \"clarification_needed\": {{$node[\"Python — /chat/message\"].json.clarification_needed}},\n  \"confirmation_required\": {{$node[\"Python — /chat/message\"].json.confirmation_required}}\n}",
+        "options": {}
+      },
+      "id": "8aaba1ab-184d-4297-aeed-f5e6a903b939",
+      "name": "Respond to Webhook — Branch A",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [880, 300]
+    },
+
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/conversation_messages?session_id=eq.{{$node[\"Webhook — Patient Chat\"].json.session_id}}&order=created_at.asc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a3c7b9b4-bc61-427b-b4bc-942575cc3fed",
+      "name": "Supabase — GET Conversation Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-1120, 520]
+    },
+
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/patients?patient_id=eq.{{$node[\"Webhook — Patient Chat\"].json.patient_id}}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "profile-endchat",
+      "name": "Supabase — GET Profile (EndChat)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-1120, 660]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/chat/end-session",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"patient_id\": \"{{$node[\"Webhook — Patient Chat\"].json.patient_id}}\",\n  \"full_conversation_log\": {{$node[\"Supabase — GET Conversation Log\"].json}},\n  \"existing_rolling_summary\": \"{{$node[\"Supabase — GET Profile (EndChat)\"].json[0].rolling_summary}}\"\n}",
+        "options": {}
+      },
+      "id": "65b9a722-1213-4598-9af1-62b1a20ec0c9",
+      "name": "Python — /chat/end-session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-860, 580]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/daily_summaries",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "patient_id", "value": "={{$node[\"Webhook — Patient Chat\"].json.patient_id}}" },
+            { "name": "date", "value": "={{$now.format(\"YYYY-MM-DD\")}}" },
+            { "name": "daily_summary", "value": "={{$node[\"Python — /chat/end-session\"].json.daily_summary}}" },
+            { "name": "rolling_summary", "value": "={{$node[\"Python — /chat/end-session\"].json.rolling_summary}}" },
+            { "name": "symptoms_today", "value": "={{JSON.stringify($node[\"Python — /chat/end-session\"].json.symptoms_today)}}" },
+            { "name": "key_risks", "value": "={{$node[\"Python — /chat/end-session\"].json.key_risks}}" },
+            { "name": "urgency", "value": "={{$node[\"Python — /chat/end-session\"].json.urgency}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "efdc3fb0-c9f6-450e-8ec9-402913cb419f",
+      "name": "Supabase — POST Daily Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-640, 580]
+    },
+
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/daily_summaries?patient_id=eq.{{$node[\"Webhook — Patient Chat\"].json.patient_id}}&order=date.asc&limit=14",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4ddca270-e6bb-4731-b600-e40d7a693ed3",
+      "name": "Supabase — GET Historical Summaries",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-420, 480]
+    },
+
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/patient_risk_scores?patient_id=eq.{{$node[\"Webhook — Patient Chat\"].json.patient_id}}&order=updated_at.asc&limit=14",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "06311efb-ef04-417d-8eaf-08843a134af8",
+      "name": "Supabase — GET Historical Risks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-420, 600]
+    },
+
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/symptoms?patient_id=eq.{{$node[\"Webhook — Patient Chat\"].json.patient_id}}&order=created_at.asc&limit=100",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "symptoms-history-node",
+      "name": "Supabase — GET Symptoms History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-420, 720]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const summaries = $node[\"Supabase — GET Historical Summaries\"].json;\nconst risks = $node[\"Supabase — GET Historical Risks\"].json;\nconst symptoms = $node[\"Supabase — GET Symptoms History\"].json;\nconst profile = $node[\"Supabase — GET Profile (EndChat)\"].json[0];\nconst session = $node[\"Python — /chat/end-session\"].json;\n\nconst summaryTexts = Array.isArray(summaries)\n  ? summaries.map(s => s.daily_summary || '').filter(Boolean)\n  : [];\n\nreturn [{\n  json: {\n    summaryTexts,\n    risks: Array.isArray(risks) ? risks : [],\n    symptoms: Array.isArray(symptoms) ? symptoms : [],\n    profile,\n    session\n  }\n}];"
+      },
+      "id": "build-predict-payload",
+      "name": "Function — Build Predict Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 600]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/risk/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"patient_id\": \"{{$node[\"Webhook — Patient Chat\"].json.patient_id}}\",\n  \"summary\": \"{{$node[\"Python — /chat/end-session\"].json.daily_summary}}\",\n  \"symptoms\": {{$node[\"Python — /chat/end-session\"].json.symptoms_today || []}},\n  \"conditions\": {{$node[\"Supabase — GET Profile (EndChat)\"].json[0].conditions || []}},\n  \"family_history\": {{$node[\"Supabase — GET Profile (EndChat)\"].json[0].family_history || []}},\n  \"missed_meds_days\": {{$node[\"Supabase — GET Profile (EndChat)\"].json[0].missed_meds_streak || 0}},\n  \"wearable_flags\": {{$node[\"Supabase — GET Profile (EndChat)\"].json[0].wearable_flags || []}},\n  \"age\": {{$node[\"Supabase — GET Profile (EndChat)\"].json[0].age || 0}}\n}",
+        "options": {}
+      },
+      "id": "efbd63f8-9d2f-4b42-b87e-ce273c340cb7",
+      "name": "Python — /risk/generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [80, 520]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/risk/predict",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"patient_id\": \"{{$node[\"Webhook — Patient Chat\"].json.patient_id}}\",\n  \"daily_summaries\": {{$node[\"Function — Build Predict Payload\"].json.summaryTexts}},\n  \"risk_scores_history\": {{$node[\"Function — Build Predict Payload\"].json.risks}},\n  \"symptoms_history\": {{$node[\"Function — Build Predict Payload\"].json.symptoms}},\n  \"wearable_trend\": [],\n  \"current_medications\": {{$node[\"Supabase — GET Profile (EndChat)\"].json[0].medications || []}},\n  \"age\": {{$node[\"Supabase — GET Profile (EndChat)\"].json[0].age || 0}},\n  \"conditions\": {{$node[\"Supabase — GET Profile (EndChat)\"].json[0].conditions || []}}\n}",
+        "options": {}
+      },
+      "id": "678816cb-a5c8-45d7-8704-c4b87e18f15f",
+      "name": "Python — /risk/predict",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [80, 680]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/patient_risk_scores",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Prefer", "value": "resolution=merge-duplicates" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "patient_id", "value": "={{$node[\"Webhook — Patient Chat\"].json.patient_id}}" },
+            { "name": "final_score", "value": "={{$node[\"Python — /risk/generate\"].json.final_score}}" },
+            { "name": "base_score", "value": "={{$node[\"Python — /risk/generate\"].json.base_score}}" },
+            { "name": "rag_adjustment", "value": "={{$node[\"Python — /risk/generate\"].json.rag_adjustment}}" },
+            { "name": "risk_level", "value": "={{$node[\"Python — /risk/generate\"].json.risk_level}}" },
+            { "name": "risk_reason", "value": "={{$node[\"Python — /risk/generate\"].json.risk_reason}}" },
+            { "name": "guideline_reference", "value": "={{$node[\"Python — /risk/generate\"].json.guideline_reference}}" },
+            { "name": "confidence", "value": "={{$node[\"Python — /risk/generate\"].json.confidence}}" },
+            { "name": "updated_at", "value": "={{$now}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4642da86-1247-4b8f-a95b-212e6efc99d7",
+      "name": "Supabase — Upsert Risk Score",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [320, 520]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/health_predictions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Prefer", "value": "resolution=merge-duplicates" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "patient_id", "value": "={{$node[\"Webhook — Patient Chat\"].json.patient_id}}" },
+            { "name": "trajectory", "value": "={{$node[\"Python — /risk/predict\"].json.trajectory}}" },
+            { "name": "score_slope", "value": "={{$node[\"Python — /risk/predict\"].json.score_slope}}" },
+            { "name": "projected_scores", "value": "={{JSON.stringify($node[\"Python — /risk/predict\"].json.projected_scores)}}" },
+            { "name": "predicted_risk_at_day_7", "value": "={{$node[\"Python — /risk/predict\"].json.predicted_risk_at_day_7}}" },
+            { "name": "predicted_risk_level_day_7", "value": "={{$node[\"Python — /risk/predict\"].json.predicted_risk_level_day_7}}" },
+            { "name": "early_warning", "value": "={{$node[\"Python — /risk/predict\"].json.early_warning}}" },
+            { "name": "early_warning_symptom", "value": "={{$node[\"Python — /risk/predict\"].json.early_warning_symptom}}" },
+            { "name": "prediction_summary", "value": "={{$node[\"Python — /risk/predict\"].json.prediction_summary}}" },
+            { "name": "watch_for", "value": "={{JSON.stringify($node[\"Python — /risk/predict\"].json.watch_for)}}" },
+            { "name": "confidence", "value": "={{$node[\"Python — /risk/predict\"].json.confidence}}" },
+            { "name": "predicted_at", "value": "={{$now}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "upsert-prediction",
+      "name": "Supabase — Upsert Prediction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [320, 680]
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$node[\"Python — /risk/generate\"].json.final_score > 70 || $node[\"Python — /risk/predict\"].json.early_warning === true}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "e21a537a-c0cb-4b75-b1c1-7b297cee22d2",
+      "name": "IF — High Risk or Early Warning?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [560, 600]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/schemes/match",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"patient_id\": \"{{$node[\"Webhook — Patient Chat\"].json.patient_id}}\",\n  \"age\": {{$node[\"Supabase — GET Profile (EndChat)\"].json[0].age || 0}},\n  \"income_category\": \"{{$node[\"Supabase — GET Profile (EndChat)\"].json[0].income_category}}\",\n  \"state\": \"{{$node[\"Supabase — GET Profile (EndChat)\"].json[0].state}}\",\n  \"confirmed_conditions\": {{$node[\"Supabase — GET Profile (EndChat)\"].json[0].conditions || []}},\n  \"current_risk_level\": \"{{$node[\"Python — /risk/generate\"].json.risk_level}}\"\n}",
+        "options": {}
+      },
+      "id": "e7c7ee00-4d2e-481c-8c35-7bedca0216c3",
+      "name": "Python — /schemes/match",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [780, 520]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.N8N_INTERNAL_URL}}/webhook/safety-agent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"patient_id\": \"{{$node[\"Webhook — Patient Chat\"].json.patient_id}}\",\n  \"trigger\": \"high_risk\",\n  \"risk_score\": {{$node[\"Python — /risk/generate\"].json.final_score}},\n  \"risk_level\": \"{{$node[\"Python — /risk/generate\"].json.risk_level}}\",\n  \"risk_reason\": \"{{$node[\"Python — /risk/generate\"].json.risk_reason}}\",\n  \"trajectory\": \"{{$node[\"Python — /risk/predict\"].json.trajectory}}\",\n  \"early_warning\": {{$node[\"Python — /risk/predict\"].json.early_warning}},\n  \"early_warning_symptom\": \"{{$node[\"Python — /risk/predict\"].json.early_warning_symptom}}\"\n}",
+        "options": {}
+      },
+      "id": "13e272c7-2ecf-4c0c-a6b1-548461a1b060",
+      "name": "Webhook — Trigger Safety Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 520]
+    },
+
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"session_saved\",\n  \"risk_level\": \"{{$node[\"Python — /risk/generate\"].json.risk_level}}\",\n  \"trajectory\": \"{{$node[\"Python — /risk/predict\"].json.trajectory}}\",\n  \"early_warning\": {{$node[\"Python — /risk/predict\"].json.early_warning}}\n}",
+        "options": {}
+      },
+      "id": "respond-endchat",
+      "name": "Respond to Webhook — Branch B",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1200, 600]
+    }
+  ],
+
+  "connections": {
+    "Webhook — Patient Chat": {
+      "main": [[{ "node": "IF — End Chat?", "type": "main", "index": 0 }]]
+    },
+
+    "IF — End Chat?": {
+      "main": [
+        [
+          { "node": "Supabase — GET Conversation Log", "type": "main", "index": 0 },
+          { "node": "Supabase — GET Profile (EndChat)", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Supabase — GET Profile", "type": "main", "index": 0 },
+          { "node": "Supabase — GET Pending Questions", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+
+    "Supabase — GET Profile": {
+      "main": [[{ "node": "Python — /chat/message", "type": "main", "index": 0 }]]
+    },
+    "Supabase — GET Pending Questions": {
+      "main": [[{ "node": "Python — /chat/message", "type": "main", "index": 0 }]]
+    },
+
+    "Python — /chat/message": {
+      "main": [[{ "node": "IF — Save Ready?", "type": "main", "index": 0 }]]
+    },
+
+    "IF — Save Ready?": {
+      "main": [
+        [{ "node": "Supabase — POST Symptom", "type": "main", "index": 0 }],
+        [{ "node": "Python — /agent/escalate", "type": "main", "index": 0 }]
+      ]
+    },
+
+    "Supabase — POST Symptom": {
+      "main": [[{ "node": "IF — Pending Question?", "type": "main", "index": 0 }]]
+    },
+
+    "IF — Pending Question?": {
+      "main": [
+        [{ "node": "Supabase — PATCH Answered Question", "type": "main", "index": 0 }],
+        [{ "node": "Python — /agent/escalate", "type": "main", "index": 0 }]
+      ]
+    },
+
+    "Supabase — PATCH Answered Question": {
+      "main": [[{ "node": "Python — /agent/escalate", "type": "main", "index": 0 }]]
+    },
+
+    "Python — /agent/escalate": {
+      "main": [[{ "node": "IF — Escalation Fired?", "type": "main", "index": 0 }]]
+    },
+
+    "IF — Escalation Fired?": {
+      "main": [
+        [{ "node": "Webhook — Trigger Safety (Escalation)", "type": "main", "index": 0 }],
+        [{ "node": "Respond to Webhook — Branch A", "type": "main", "index": 0 }]
+      ]
+    },
+
+    "Webhook — Trigger Safety (Escalation)": {
+      "main": [[{ "node": "Respond to Webhook — Branch A", "type": "main", "index": 0 }]]
+    },
+
+    "Supabase — GET Conversation Log": {
+      "main": [[{ "node": "Python — /chat/end-session", "type": "main", "index": 0 }]]
+    },
+    "Supabase — GET Profile (EndChat)": {
+      "main": [[{ "node": "Python — /chat/end-session", "type": "main", "index": 0 }]]
+    },
+
+    "Python — /chat/end-session": {
+      "main": [[{ "node": "Supabase — POST Daily Summary", "type": "main", "index": 0 }]]
+    },
+
+    "Supabase — POST Daily Summary": {
+      "main": [
+        [
+          { "node": "Supabase — GET Historical Summaries", "type": "main", "index": 0 },
+          { "node": "Supabase — GET Historical Risks", "type": "main", "index": 0 },
+          { "node": "Supabase — GET Symptoms History", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+
+    "Supabase — GET Historical Summaries": {
+      "main": [[{ "node": "Function — Build Predict Payload", "type": "main", "index": 0 }]]
+    },
+    "Supabase — GET Historical Risks": {
+      "main": [[{ "node": "Function — Build Predict Payload", "type": "main", "index": 0 }]]
+    },
+    "Supabase — GET Symptoms History": {
+      "main": [[{ "node": "Function — Build Predict Payload", "type": "main", "index": 0 }]]
+    },
+
+    "Function — Build Predict Payload": {
+      "main": [
+        [
+          { "node": "Python — /risk/generate", "type": "main", "index": 0 },
+          { "node": "Python — /risk/predict", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+
+    "Python — /risk/generate": {
+      "main": [[{ "node": "Supabase — Upsert Risk Score", "type": "main", "index": 0 }]]
+    },
+    "Python — /risk/predict": {
+      "main": [[{ "node": "Supabase — Upsert Prediction", "type": "main", "index": 0 }]]
+    },
+
+    "Supabase — Upsert Risk Score": {
+      "main": [[{ "node": "IF — High Risk or Early Warning?", "type": "main", "index": 0 }]]
+    },
+    "Supabase — Upsert Prediction": {
+      "main": [[{ "node": "IF — High Risk or Early Warning?", "type": "main", "index": 0 }]]
+    },
+
+    "IF — High Risk or Early Warning?": {
+      "main": [
+        [{ "node": "Python — /schemes/match", "type": "main", "index": 0 }],
+        [{ "node": "Respond to Webhook — Branch B", "type": "main", "index": 0 }]
+      ]
+    },
+
+    "Python — /schemes/match": {
+      "main": [[{ "node": "Webhook — Trigger Safety Agent", "type": "main", "index": 0 }]]
+    },
+
+    "Webhook — Trigger Safety Agent": {
+      "main": [[{ "node": "Respond to Webhook — Branch B", "type": "main", "index": 0 }]]
+    }
+  },
+
+  "pinData": {},
+  "meta": {
+    "instanceId": "5eadcf7e8b907856f283509781e4e82b606160fbf32835473d52a300a01a8683"
+  }
+}

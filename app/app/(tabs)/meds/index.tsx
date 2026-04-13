@@ -4,8 +4,10 @@ import { SkeletonMedsScreen } from '@/components/ui/SkeletonLoader';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSegments } from 'expo-router';
-import React, { useState } from 'react';
-import { Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
+import { getMedicines, logMedAdherence } from '@/services/supabase.service';
+import { useAuthStore } from '@/store/auth.store';
 
 const TopNavBar = ({ 
   onScanPress, 
@@ -68,26 +70,41 @@ export default function MedsScreen() {
   const segments = useSegments();
   const currentRoute = segments[segments.length - 1];
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [medications, setMedications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Skeleton loading timeout: 4 seconds fixed duration
-  const SKELETON_DURATION = 4000; // 4 seconds
-  const MAX_SKELETON_TIME = 240000; // 4 minutes max timeout
+  const { user } = useAuthStore();
+  const patientId = user?.id;
+
+  useEffect(() => {
+    if (patientId) {
+      loadData();
+    }
+  }, [patientId]);
+
+  const loadData = async () => {
+    try {
+      if (!patientId) return;
+      const data = await getMedicines(patientId);
+      setMedications(data);
+    } catch (error) {
+      console.error("Failed to load meds:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handleLogAdherence = async (medName: string) => {
+    try {
+      if (!patientId) return;
+      await logMedAdherence(patientId, medName);
+      Alert.alert("Success", `Adherence logged for ${medName}`);
+    } catch (error) {
+      Alert.alert("Error", "Failed to log adherence");
+    }
+  };
 
   const handleIntroComplete = () => {
-    // Hide skeleton after fixed 4 seconds duration
-    const skeletonTimeout = setTimeout(() => {
-      setIsDataLoaded(true);
-    }, SKELETON_DURATION);
-
-    // Safety: force show content after 4 minutes max
-    const maxTimeoutTimer = setTimeout(() => {
-      setIsDataLoaded(true);
-    }, MAX_SKELETON_TIME);
-
-    return () => {
-      clearTimeout(skeletonTimeout);
-      clearTimeout(maxTimeoutTimer);
-    };
+    setIsDataLoaded(true);
   };
   
   return (
@@ -103,16 +120,45 @@ export default function MedsScreen() {
       />
       <ScreenIntroGate
         loaderText="Loading medication details..."
-        loaderDuration={3000}
+        loaderDuration={2000}
         backgroundColor="#F9FAFB"
         onIntroComplete={handleIntroComplete}
       >
-        {!isDataLoaded ? (
+        {!isDataLoaded || loading ? (
           <SkeletonMedsScreen />
         ) : (
           <ScrollView contentContainerStyle={styles.scrollContent}>
-            <Text style={styles.title}>Medications Screen</Text>
-            <Text style={styles.subtitle}>Your medications will appear here</Text>
+            <View style={styles.header}>
+              <Text style={styles.title}>Your Medications</Text>
+              <Text style={styles.subtitle}>Track your daily adherence</Text>
+            </View>
+
+            {medications.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="medkit-outline" size={64} color="#D1D5DB" />
+                <Text style={styles.emptyText}>No medications prescribed yet.</Text>
+              </View>
+            ) : (
+              medications.map((med, index) => (
+                <View key={med.id || index} style={styles.medCard}>
+                  <View style={styles.medInfo}>
+                    <View style={styles.medIconBg}>
+                      <Ionicons name="medical" size={24} color="#0474FC" />
+                    </View>
+                    <View>
+                      <Text style={styles.medName}>{med.medicine_name}</Text>
+                      <Text style={styles.medDetail}>Next dose: Morning</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.logButton}
+                    onPress={() => handleLogAdherence(med.medicine_name)}
+                  >
+                    <Ionicons name="checkmark-circle" size={28} color="#0474FC" />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
           </ScrollView>
         )}
       </ScreenIntroGate>
@@ -122,9 +168,38 @@ export default function MedsScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F9FAFB' },
-  scrollContent: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#111827', marginBottom: 10 },
-  subtitle: { fontSize: 16, color: '#6B7280' },
+  scrollContent: { padding: 20 },
+  header: { marginBottom: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
+  subtitle: { fontSize: 16, color: '#6B7280', marginTop: 4 },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 100 },
+  emptyText: { color: '#9CA3AF', marginTop: 12, fontSize: 16 },
+  medCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  medInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  medIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#E8F1FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  medName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
+  medDetail: { fontSize: 13, color: '#6B7280', marginTop: 2 },
+  logButton: { padding: 4 },
   topNavContainer: { paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 12, backgroundColor: '#F9FAFB' },
   topNavBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 5 },
   leftButton: { shadowColor: '#0474FC', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },

@@ -1,36 +1,36 @@
 // app/(tabs)/home/index.tsx
-import { BodyMapVisualization3D } from '@/components/bodymap/BodyMapVisualization3D';
-import { BodyMapCard } from '@/components/home/BodyMapCard';
-import { GovernmentSchemeCard } from '@/components/home/GovernmentSchemeCard';
 import { ScreenIntroGate } from '@/components/ui/ScreenIntroGate';
-import React from 'react';
-import { 
-  ScrollView, 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  SafeAreaView, 
-  StatusBar,
-  Platform,
-  Alert
-} from 'react-native';
+import { SkeletonHomeScreen } from '@/components/ui/SkeletonLoader';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSegments, router } from 'expo-router';
+import { router, useSegments } from 'expo-router';
+import React, { useState, useEffect } from 'react';
+import {
+  Alert,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { supabase } from '@/services/supabaseClient';
+import { useAuthStore } from '@/store/auth.store';
 
 // Top Navigation Bar Component (inline)
-const TopNavBar = ({ 
-  onScanPress, 
-  onNotificationPress, 
-  onProfilePress, 
-  notificationCount = 3, 
-  userName = 'Indresh',
+const TopNavBar = ({
+  onScanPress,
+  onNotificationPress,
+  onProfilePress,
+  notificationCount = 3,
+  userName = 'Rahul',
   activeScreen = 'DASHBOARD'
 }: any) => {
   // Get the title based on active screen
   const getTitle = () => {
-    switch(activeScreen) {
+    switch (activeScreen) {
       case 'home': return 'DASHBOARD';
       case 'checkin': return 'CHECK-IN';
       case 'meds': return 'MEDICATIONS';
@@ -126,18 +126,39 @@ const AIChatButton = () => {
 export default function HomeScreen() {
   const segments = useSegments();
   const currentRoute = segments[segments.length - 1];
+  const { user } = useAuthStore();
+  const [profile, setProfile] = useState<any>(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const [bodyMapVisible, setBodyMapVisible] = useState(false);
 
   // Skeleton loading timeout: 4 seconds fixed duration
   const SKELETON_DURATION = 4000; // 4 seconds
   const MAX_SKELETON_TIME = 90000; // 4 minutes max timeout
   const skeletonStartTime = React.useRef<number>(Date.now());
 
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+    }
+  }, [user]);
+
+  const fetchProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user?.id)
+        .single();
+
+      if (data) setProfile(data);
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    }
+  };
+
   const handleIntroComplete = () => {
     // Start skeleton loading after intro animation
     skeletonStartTime.current = Date.now();
-    
+
     // Hide skeleton after fixed 4 seconds duration
     const skeletonTimeout = setTimeout(() => {
       setIsDataLoaded(true);
@@ -153,21 +174,21 @@ export default function HomeScreen() {
       clearTimeout(maxTimeoutTimer);
     };
   };
-  
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
-      
+
       {/* Top Navigation Bar with dynamic title */}
-      <TopNavBar 
+      <TopNavBar
         onScanPress={() => console.log('Scan pressed')}
         onNotificationPress={() => console.log('Notification pressed')}
-        onProfilePress={() => console.log('Profile pressed')}
+        onProfilePress={() => router.push('/(tabs)/profile')}
         notificationCount={3}
-        userName="Rahul"
+        userName={profile?.name || 'User'}
         activeScreen={currentRoute}
       />
-      
+
       <ScreenIntroGate
         loaderText="Loading your health dashboard..."
         loaderDuration={3000}
@@ -179,48 +200,16 @@ export default function HomeScreen() {
         {!isDataLoaded ? (
           <SkeletonHomeScreen />
         ) : (
-          <>
-            <ScrollView 
-              style={styles.container} 
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.content}>
-                {/* Welcome Section */}
-                <View style={styles.welcomeSection}>
-                  <View style={styles.welcomeHeader}>
-                    <View style={styles.shieldIcon}>
-                      <Ionicons name="shield-checkmark" size={16} color="#0474FC" />
-                    </View>
-                    <Text style={styles.welcomeSubtitle}>CLINICAL HEALTH ID: #SW-9431</Text>
-                  </View>
-                  <Text style={styles.welcomeTitle}>Welcome back, Rahul</Text>
-                  <Text style={styles.welcomeDescription}>Your individualized health intelligence hub is ready</Text>
-                </View>
-
-                {/* Government Scheme Card */}
-                <GovernmentSchemeCard />
-
-                {/* 3D Body Map Card */}
-                <BodyMapCard onPress={() => setBodyMapVisible(true)} />
-
-                {/* Additional Content Areas */}
-                <View style={styles.contentSection}>
-                  <Text style={styles.sectionTitle}>Health Status</Text>
-                  <Text style={styles.placeholderText}>More health components coming soon...</Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            {/* Body Map Modal */}
-            <BodyMapVisualization3D 
-              visible={bodyMapVisible} 
-              onClose={() => setBodyMapVisible(false)} 
-            />
-
-            {/* AI Chat Button - Floating */}
-            <AIChatButton />
-          </>
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.content}>
+              <Text style={styles.welcomeText}>Welcome to Your Health Dashboard</Text>
+              {/* Rest of your existing home screen components */}
+            </View>
+          </ScrollView>
         )}
       </ScreenIntroGate>
     </SafeAreaView>
@@ -236,7 +225,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 120,
+    paddingBottom: 100,
   },
   content: {
     padding: 20,

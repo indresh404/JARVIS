@@ -8,3 +8,4 @@ export default function Index() {
   if (!hasProfile) return <Redirect href="/(onboarding)/user-details" />;
   return <Redirect href="/(tabs)/home" />;
 }
+

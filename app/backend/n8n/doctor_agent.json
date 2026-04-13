@@ -1,0 +1,112 @@
+{
+  "name": "Doctor Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "doctor",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value": "={{$json.action}}",
+        "rules": {
+          "rules": [
+            { "value": "view", "output": 0 },
+            { "value": "ask", "output": 1 },
+            { "value": "family", "output": 2 },
+            { "value": "briefing", "output": 3 }
+          ]
+        }
+      },
+      "id": "switch-action",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/agent/doctor-answer",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "question", "value": "={{$json.question}}" },
+            { "name": "patient_id", "value": "={{$json.patient_id}}" },
+            { "name": "full_context", "value": "={}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "python-ask",
+      "name": "Python — /agent/doctor-answer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {}
+      },
+      "id": "respond-doctor",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Python — /agent/doctor-answer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        []
+      ]
+    },
+    "Python — /agent/doctor-answer": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null,
+  "meta": {
+    "templateId": null
+  },
+  "pinData": {}
+}

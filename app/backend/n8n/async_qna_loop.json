@@ -1,0 +1,121 @@
+{
+  "name": "Async QnA Loop",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "supabase-webhook-qna",
+        "options": {}
+      },
+      "id": "supabase-trigger",
+      "name": "Supabase Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.new.status}}",
+              "value2": "answered"
+            }
+          ]
+        }
+      },
+      "id": "if-answered",
+      "name": "IF — Is Answered?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/pending_checkin_questions?id=eq.{{$json.new.id}}&select=*,patients(name,doctor_email,doctor_fcm_token)&limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_ANON_KEY}}" },
+            { "name": "Authorization", "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-doctor-info",
+      "name": "Supabase — GET Doctor Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://fcm.googleapis.com/fcm/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=key={{$env.FCM_SERVER_KEY}}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "to", "value": "={{$node[\"Supabase — GET Doctor Info\"].json[0].patients.doctor_fcm_token}}" },
+            { "name": "notification", "value": "={ \"title\": \"{{$node[\"Supabase — GET Doctor Info\"].json[0].patients.name}} answered your query\", \"body\": \"{{$node[\"Supabase — GET Doctor Info\"].json[0].patient_answer}}\" }" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fcm-notify",
+      "name": "FCM — Notify Doctor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Supabase Webhook": {
+      "main": [
+        [
+          {
+            "node": "IF — Is Answered?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Is Answered?": {
+      "main": [
+        [
+          {
+            "node": "Supabase — GET Doctor Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase — GET Doctor Info": {
+      "main": [
+        [
+          {
+            "node": "FCM — Notify Doctor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null,
+  "meta": {
+    "templateId": null
+  },
+  "pinData": {}
+}

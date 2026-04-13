@@ -1,26 +1,46 @@
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/config/supabase';
+import { BACKEND_URL, API_ENDPOINTS } from '@/config/api';
 
-const headers = {
-  apikey: SUPABASE_ANON_KEY,
-  Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-  'Content-Type': 'application/json',
+export const getPatientProfile = async (id: string) => {
+    const response = await fetch(`${BACKEND_URL}${API_ENDPOINTS.PROFILE.GET(id)}`);
+    const data = await response.json();
+    return data.status === 'success' ? data.profile : null;
 };
 
-const fetchFromSupabase = async (path: string) => {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers });
-  return response.json();
+export const updatePatientProfile = async (id: string, updates: any) => {
+    const response = await fetch(`${BACKEND_URL}${API_ENDPOINTS.PROFILE.PATCH(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+    });
+    return response.json();
 };
 
-export const getPatientProfile = async (id: string) =>
-  fetchFromSupabase(`patients?id=eq.${id}&select=*`);
+export const getMedicines = async (id: string) => {
+    const response = await fetch(`${BACKEND_URL}${API_ENDPOINTS.MEDS.LIST(id)}`);
+    const data = await response.json();
+    return data.status === 'success' ? data.medications : [];
+};
 
-export const getRiskScore = async (id: string) =>
-  fetchFromSupabase(`patient_profile_summary?patient_id=eq.${id}&select=*`);
+export const logMedAdherence = async (patientId: string, medicine: string) => {
+    const response = await fetch(`${BACKEND_URL}${API_ENDPOINTS.MEDS.LOG}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient_id: patientId, medicine }),
+    });
+    return response.json();
+};
 
-export const getSymptoms = async (id: string) =>
-  fetchFromSupabase(
-    `symptoms?patient_id=eq.${id}&date=gte.${new Date(Date.now() - 7 * 86400000).toISOString()}&select=*`,
-  );
+export const getPendingCheckins = async (id: string) => {
+    const response = await fetch(`${BACKEND_URL}${API_ENDPOINTS.CHECKINS.PENDING(id)}`);
+    const data = await response.json();
+    return data.status === 'success' ? data.questions : [];
+};
 
-export const getMedicines = async (id: string) =>
-  fetchFromSupabase(`medicines?patient_id=eq.${id}&is_active=eq.true&select=*`);
+export const submitCheckin = async (patientId: string, answers: any[]) => {
+    const response = await fetch(`${BACKEND_URL}${API_ENDPOINTS.CHECKINS.SUBMIT}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient_id: patientId, answers }),
+    });
+    return response.json();
+};

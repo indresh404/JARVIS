@@ -15,6 +15,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useAuthStore } from '@/store/auth.store';
+import { supabase } from '@/services/supabaseClient';
 
 const { width, height } = Dimensions.get('window');
 
@@ -160,24 +162,23 @@ export default function LoginScreen() {
     animatePop(buttonPopAnim);
 
     if (phoneNumber.length < 10) {
-      Alert.alert('Error', 'Please enter a valid phone number');
+      Alert.alert('Error', 'Please enter a valid 10-digit phone number');
       return;
     }
 
     setLoading(true);
 
-    setTimeout(() => {
+    try {
+      // MOCK BYPASS: Skip real Supabase OTP call because of Twilio config issues
       setLoading(false);
       router.push({
         pathname: '/(auth)/otp',
         params: { phone: phoneNumber },
       });
-    }, 1500);
-  };
-
-  const handleGoogleSignIn = () => {
-    animatePop(googleButtonPopAnim);
-    Alert.alert('Google Sign In', 'Google authentication would be integrated here');
+    } catch (error) {
+      setLoading(false);
+      Alert.alert('Connection Error', 'Could not reach Supabase');
+    }
   };
 
   const handleBack = () => {
@@ -385,23 +386,7 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Google Sign In Button */}
-          <TouchableOpacity
-            onPress={handleGoogleSignIn}
-            activeOpacity={0.8}
-          >
-            <Animated.View
-              style={[
-                styles.googleButton,
-                {
-                  transform: [{ scale: googleButtonPopAnim }],
-                },
-              ]}
-            >
-              <Ionicons name="logo-google" size={22} color="#EA4335" />
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
-            </Animated.View>
-          </TouchableOpacity>
+          {/* Google Sign In Button removed as it was Firebase-based */}
         </Animated.View>
       </KeyboardAvoidingView>
     </View>

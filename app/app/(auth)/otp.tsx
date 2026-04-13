@@ -1,16 +1,22 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
-import { useRouter } from 'expo-router';
+import { COLORS, TYPOGRAPHY } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { COLORS, STYLES } from '../../constants/Colors';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function OTPVerifyScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const params = useLocalSearchParams();
   const [code, setCode] = useState(['', '', '', '', '', '']);
-  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const inputs = useRef<Array<TextInput | null>>([]);
-  const [timer, setTimer] = useState(28);
+  const [timer, setTimer] = useState(30);
+
+  // Get phone number from navigation params
+  const phoneNumber = params.phone as string || '+91 XXXXX XXXXX';
+  const formattedPhone = phoneNumber.startsWith('+91') ? phoneNumber : `+91 ${phoneNumber}`;
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -22,104 +28,167 @@ export default function OTPVerifyScreen() {
     return () => clearInterval(interval);
   }, [timer]);
 
+  // Auto-focus first input on mount
+  useEffect(() => {
+    setTimeout(() => {
+      inputs.current[0]?.focus();
+    }, 100);
+  }, []);
+
   const handleChange = (text: string, index: number) => {
     const newCode = [...code];
     newCode[index] = text;
     setCode(newCode);
 
+    // Auto-advance to next box on input
     if (text !== '' && index < 5) {
       inputs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all digits are filled
+    if (text !== '' && index === 5 && newCode.every(digit => digit !== '')) {
+      setTimeout(() => {
+        handleVerify();
+      }, 100);
     }
   };
 
   const handleKeyPress = (e: any, index: number) => {
+    // Handle backspace to go to previous box
     if (e.nativeEvent.key === 'Backspace' && index > 0 && code[index] === '') {
       inputs.current[index - 1]?.focus();
     }
   };
 
-  const handleVerify = () => {
+  const handleBack = () => {
+    // Always try to go back, if fails then navigate to login
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      // Navigate directly to login screen
+      router.replace('/(auth)/login');
+    }
+  };
+
+  const handleVerify = async () => {
     Keyboard.dismiss();
-    router.push('/(onboarding)/user-details');
+    const otpCode = code.join('');
+
+    if (otpCode.length !== 6) {
+      Alert.alert('Error', 'Please enter the complete 6-digit OTP');
+      return;
+    }
+
+    // Simulate OTP verification
+    // In production, verify with your backend/Supabase
+
+    // After OTP verification, check if user has profile in Supabase
+    // const { data: profile } = await supabase
+    //   .from('profiles')
+    //   .select('*')
+    //   .eq('user_id', userId)
+    //   .single();
+
+    // Simulate checking profile existence
+    const hasProfile = false; // Replace with actual Supabase check
+
+    if (hasProfile) {
+      router.replace('/(tabs)/home');
+    } else {
+      router.replace('/(onboarding)/chat');
+    }
+  };
+
+  const handleResendOTP = () => {
+    setTimer(30);
+    Alert.alert('OTP Resent', `A new OTP has been sent to ${formattedPhone}`);
+    // Clear existing OTP
+    setCode(['', '', '', '', '', '']);
+    inputs.current[0]?.focus();
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <View style={styles.content}>
-          <Animated.View entering={FadeInDown.delay(50).springify()}>
-            {/* Back Button */}
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={COLORS.text.secondary} />
-            </TouchableOpacity>
-
-            {/* Icon */}
-            <View style={styles.iconCircle}>
-              <Ionicons name="mail" size={32} color={COLORS.primary} />
+          {/* Back Button */}
+          <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.7}>
+            <View style={styles.backButtonBg}>
+              <Ionicons name="arrow-back" size={24} color={COLORS.primary || '#2563EB'} />
             </View>
+          </TouchableOpacity>
 
-            {/* Titles */}
-            <Text style={styles.title}>Enter OTP</Text>
-            <View style={styles.subtitleRow}>
-              <Text style={styles.subtitle}>Sent to +91 XXXXX XXXXX </Text>
-              <TouchableOpacity onPress={() => router.back()}>
-                <Text style={styles.changeText}>Change number</Text>
-              </TouchableOpacity>
-            </View>
+          {/* Header Section */}
+          <View style={styles.headerSection}>
+            <Text style={styles.title}>Verify your number</Text>
+            <Text style={styles.subtitle}>
+              We sent a verification code to
+            </Text>
+            <Text style={styles.phoneNumber}>{formattedPhone}</Text>
+          </View>
 
-            {/* OTP Inputs */}
-            <View style={styles.otpContainer}>
-              {code.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(ref) => { inputs.current[index] = ref; }}
-                  style={[
-                    styles.otpBox,
-                    focusedIndex === index && styles.otpBoxFocused,
-                    focusedIndex === index && STYLES.shadow,
-                    digit !== '' && styles.otpBoxFilled
-                  ]}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  value={digit}
-                  onChangeText={(text) => handleChange(text, index)}
-                  onKeyPress={(e) => handleKeyPress(e, index)}
-                  onFocus={() => setFocusedIndex(index)}
-                  onBlur={() => setFocusedIndex(-1)}
-                  selectTextOnFocus
-                />
-              ))}
-            </View>
+          {/* OTP Inputs - 6 Individual White Square Boxes with Blue Gradient Border */}
+          <View style={styles.otpContainer}>
+            {code.map((digit, index) => (
+              <View key={index} style={styles.otpBoxWrapper}>
+                <LinearGradient
+                  colors={
+                    focusedIndex === index || digit !== ''
+                      ? ['#2563EB', '#3B82F6', '#60A5FA']  // Blue gradient when focused/filled
+                      : ['#E2E8F0', '#E2E8F0', '#E2E8F0']   // Gray gradient when empty
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.otpGradientBorder}
+                >
+                  <View style={styles.otpInnerBox}>
+                    <TextInput
+                      ref={(ref) => { inputs.current[index] = ref; }}
+                      style={styles.otpBox}
+                      keyboardType="number-pad"
+                      maxLength={1}
+                      value={digit}
+                      onChangeText={(text) => handleChange(text, index)}
+                      onKeyPress={(e) => handleKeyPress(e, index)}
+                      onFocus={() => setFocusedIndex(index)}
+                      onBlur={() => setFocusedIndex(-1)}
+                      selectTextOnFocus
+                    />
+                  </View>
+                </LinearGradient>
+              </View>
+            ))}
+          </View>
 
-            {/* Resend Timer */}
-            <TouchableOpacity 
-              style={styles.resendContainer} 
-              disabled={timer > 0}
-              onPress={() => setTimer(28)}
-            >
-              {timer > 0 ? (
-                <Text style={styles.timerText}>Resend in 0:{timer.toString().padStart(2, '0')}</Text>
-              ) : (
+          {/* Resend Section */}
+          <View style={styles.resendContainer}>
+            {timer > 0 ? (
+              <Text style={styles.timerText}>Resend code in {timer}s</Text>
+            ) : (
+              <TouchableOpacity onPress={handleResendOTP} activeOpacity={0.7}>
                 <Text style={styles.resendText}>Resend OTP</Text>
-              )}
-            </TouchableOpacity>
-          </Animated.View>
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* Spacer */}
           <View style={{ flex: 1 }} />
 
-          {/* Verify Button */}
-          <Animated.View entering={FadeInDown.delay(100).springify()}>
-            <TouchableOpacity 
-              style={[styles.primaryButton, STYLES.shadowPrimary]} 
-              onPress={handleVerify}
+          {/* Verify Button with Gradient */}
+          <TouchableOpacity onPress={handleVerify} activeOpacity={0.8}>
+            <LinearGradient
+              colors={['#2563EB', '#3B82F6', '#60A5FA']}  // Blue gradient matching login page
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.verifyButton}
             >
-              <Text style={styles.primaryButtonText}>Verify & Continue</Text>
-            </TouchableOpacity>
-          </Animated.View>
+              <Text style={styles.verifyButtonText}>Verify</Text>
+              <Ionicons name="checkmark-circle" size={22} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -129,7 +198,7 @@ export default function OTPVerifyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: '#F8FAFC',  // Light background matching login page
   },
   keyboardView: {
     flex: 1,
@@ -137,92 +206,130 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingTop: Platform.OS === 'ios' ? 20 : 40,
     paddingBottom: 40,
   },
   backButton: {
+    marginBottom: 24,
     width: 40,
     height: 40,
-    justifyContent: 'center',
-    marginBottom: 24,
   },
-  iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.primaryLight,
+  backButtonBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  headerSection: {
+    marginBottom: 48,
   },
   title: {
-    fontSize: 26,
-    fontFamily: 'Inter_700Bold',
-    color: COLORS.text.primary,
+    fontFamily: TYPOGRAPHY?.fonts?.bold || 'System',
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1E3A8A',  // Dark blue matching login page
     marginBottom: 8,
   },
-  subtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 32,
-  },
   subtitle: {
+    fontFamily: TYPOGRAPHY?.fonts?.regular || 'System',
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: COLORS.text.secondary,
+    color: '#64748B',  // Muted text color
+    marginBottom: 4,
   },
-  changeText: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    color: COLORS.primary,
+  phoneNumber: {
+    fontFamily: TYPOGRAPHY?.fonts?.semibold || 'System',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1E293B',  // Dark text color
+    marginTop: 4,
   },
   otpContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 32,
-  },
-  otpBox: {
-    width: 52,
-    height: 60,
-    backgroundColor: COLORS.white,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    textAlign: 'center',
-    fontSize: 24,
-    fontFamily: 'Inter_700Bold',
-    color: COLORS.text.primary,
-  },
-  otpBoxFocused: {
-    borderColor: COLORS.primary,
-  },
-  otpBoxFilled: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.surface,
-  },
-  resendContainer: {
     alignItems: 'center',
+    marginBottom: 32,
+    gap: 10,
   },
-  timerText: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: COLORS.text.muted,
+  otpBoxWrapper: {
+    flex: 1,
+    aspectRatio: 1,
+    maxWidth: 55,
   },
-  resendText: {
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
-    color: COLORS.primary,
+  otpGradientBorder: {
+    flex: 1,
+    padding: 2,
+    borderRadius: 12,
   },
-  primaryButton: {
-    backgroundColor: COLORS.primary,
-    height: 56,
-    borderRadius: 14,
+  otpInnerBox: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  primaryButtonText: {
-    color: COLORS.white,
+  otpBox: {
+    width: '100%',
+    height: '100%',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    fontSize: 22,
+    fontWeight: '700',
+    fontFamily: TYPOGRAPHY?.fonts?.bold || 'System',
+    color: '#1E293B',
+    padding: 0,
+    margin: 0,
+  },
+  resendContainer: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  timerText: {
+    fontSize: 14,
+    fontFamily: TYPOGRAPHY?.fonts?.regular || 'System',
+    color: '#64748B',
+  },
+  resendText: {
+    fontSize: 14,
+    fontFamily: TYPOGRAPHY?.fonts?.semibold || 'System',
+    fontWeight: '600',
+    color: '#2563EB',  // Blue color matching login page
+  },
+  verifyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    height: 56,
+    borderRadius: 14,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
+  },
+  verifyButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: TYPOGRAPHY?.fonts?.semibold || 'System',
+    fontWeight: '600',
   },
 });

@@ -9,7 +9,7 @@ export const TypingIndicator: React.FC = () => {
   const dot3 = useRef(new Animated.Value(0)).current;
 
   const animateDot = (dot: Animated.Value, delay: number) => {
-    Animated.loop(
+    return Animated.loop(
       Animated.sequence([
         Animated.delay(delay),
         Animated.timing(dot, {
@@ -27,10 +27,18 @@ export const TypingIndicator: React.FC = () => {
   };
 
   useEffect(() => {
-    animateDot(dot1, 0);
-    animateDot(dot2, 200);
-    animateDot(dot3, 400);
-  }, []);
+    const animations = [
+      animateDot(dot1, 0),
+      animateDot(dot2, 200),
+      animateDot(dot3, 400),
+    ];
+
+    animations.forEach((animation) => animation.start());
+
+    return () => {
+      animations.forEach((animation) => animation.stop());
+    };
+  }, [dot1, dot2, dot3]);
 
   const getDotStyle = (dot: Animated.Value) => ({
     transform: [

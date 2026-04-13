@@ -29,36 +29,33 @@ import Animated, {
 
 const { width, height } = Dimensions.get('window');
 
-// Replace the SmoothTypingText component with this:
-
+// SmoothTypingText component
 const SmoothTypingText = ({ text, style, isActive }: any) => {
   const [displayText, setDisplayText] = useState('');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
-    // Clear any existing interval when slide changes
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
     
     if (isActive) {
-      setDisplayText(''); // Reset text when slide becomes active
+      setDisplayText('');
       let index = 0;
       
-      intervalRef.current = setInterval(() => {
+      const interval = setInterval(() => {
         if (index < text.length) {
           setDisplayText(text.substring(0, index + 1));
           index++;
         } else {
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
+          clearInterval(interval);
         }
-      }, 20); // 20ms per character for smooth typing
+      }, 20);
+      
+      intervalRef.current = interval;
     } else {
-      setDisplayText(''); // Clear text when slide is inactive
+      setDisplayText('');
     }
     
     return () => {
@@ -84,7 +81,7 @@ const slides = [
   {
     id: '1',
     tag: 'AI HEALTH ASSISTANT',
-    headline: 'Your Personal\nHealth Guardian',
+    headline: 'Personal\nHealth Guardian',
     body: 'Advanced AI that understands your health concerns and provides personalized guidance 24/7, right when you need it most.',
     icon: 'medkit-outline',
     gradient: ['#ff3838', '#cb0000'],
@@ -125,16 +122,12 @@ const slides = [
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  
   const scrollY = useSharedValue(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showContinue, setShowContinue] = useState(false);
   const flatListRef = useRef<Animated.FlatList<any>>(null);
-
-  useEffect(() => {
-    StatusBar.setBarStyle('light-content');
-    StatusBar.setBackgroundColor('transparent');
-  }, []);
-
+  
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollY.value = event.contentOffset.y;
@@ -149,6 +142,11 @@ export default function WelcomeScreen() {
       }
     },
   });
+
+  useEffect(() => {
+    StatusBar.setBarStyle('light-content');
+    StatusBar.setBackgroundColor('transparent');
+  }, []);
 
   const goToNext = () => {
     if (currentIndex < slides.length - 1) {
@@ -171,7 +169,6 @@ export default function WelcomeScreen() {
     <GestureHandlerRootView style={styles.container}>
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: COLORS.primary }]} />
       
-      {/* Top Bar */}
       <Animated.View 
         entering={FadeInDown.delay(200).springify()}
         style={styles.topBar}
@@ -202,7 +199,6 @@ export default function WelcomeScreen() {
         </View>
       </Animated.View>
 
-      {/* Main Slides */}
       <Animated.FlatList
         ref={flatListRef}
         data={slides}
@@ -216,7 +212,6 @@ export default function WelcomeScreen() {
         bounces={false}
       />
 
-      {/* Page Indicator - Fixed */}
       <View style={styles.pageIndicatorContainer}>
         <View style={styles.pageIndicator}>
           {slides.map((_, idx) => {
@@ -238,7 +233,6 @@ export default function WelcomeScreen() {
         </View>
       </View>
 
-      {/* Bottom Button */}
       <Animated.View 
         entering={FadeInDown.delay(700).springify()}
         style={styles.bottomButton}
@@ -276,7 +270,7 @@ export default function WelcomeScreen() {
   );
 }
 
-// Slide Component with Smooth Animations
+// Slide Component
 const SlideView: React.FC<{ slide: any; index: number; isActive: boolean }> = ({ 
   slide, 
   index, 
@@ -295,7 +289,7 @@ const SlideView: React.FC<{ slide: any; index: number; isActive: boolean }> = ({
         require('@/assets/lottie_animations/login_animation_5.json'),
       ];
       return animations[index % animations.length];
-    } catch (error) {
+    } catch {
       return null;
     }
   };
@@ -309,7 +303,7 @@ const SlideView: React.FC<{ slide: any; index: number; isActive: boolean }> = ({
     } else {
       contentOpacity.value = withTiming(0, { duration: 300 });
     }
-  }, [isActive]);
+  }, [contentOpacity, isActive]);
 
   const animatedContentStyle = useAnimatedStyle(() => ({
     opacity: contentOpacity.value,
@@ -320,91 +314,90 @@ const SlideView: React.FC<{ slide: any; index: number; isActive: boolean }> = ({
 
   return (
     <View style={[styles.slideContainer, { height }]}>
-  <Animated.View style={[styles.slideContent, animatedContentStyle]}>
-    {/* Tag Chip */}
-    <Animated.View
-      entering={FadeInDown.delay(100).springify()}
-      style={styles.tagContainer}
-    >
-      <LinearGradient
-        colors={[slide.gradient[0], slide.gradient[1]]}
-        style={styles.tagGradient}
-      >
-        <Ionicons name={slide.icon} size={14} color={COLORS.white} />
-        <Text style={styles.tagText}>{slide.tag}</Text>
-      </LinearGradient>
-    </Animated.View>
-
-    {/* Headline */}
-    <Animated.View entering={FadeInDown.delay(200).springify()}>
-      {headlineParts.map((part: string, partIndex: number) => (
-        <Text key={partIndex} style={styles.headline}>
-          {part}
-        </Text>
-      ))}
-    </Animated.View>
-
-    {/* Body Text with Smooth Typing Animation - Shows immediately and types */}
-    {/* Body Text with Smooth Typing Animation */}
-    <View style={styles.bodyContainer}>
-      <SmoothTypingText
-        text={slide.body}
-        style={styles.bodyText}
-        onComplete={() => {}}
-        isActive={isActive}  // Add this prop
-      />
-    </View>
-
-    {/* Counter - Shows immediately */}
-    <Animated.View
-      entering={FadeIn.delay(200)}
-      style={styles.counter}
-    >
-      <LinearGradient
-        colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
-        style={styles.counterGradient}
-      >
-        <Text style={styles.counterText}>
-          {String(index + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}
-        </Text>
-      </LinearGradient>
-    </Animated.View>
-
-    {/* Lottie Animation - Shows immediately and plays while text types */}
-    <View style={styles.lottieWrapper}>
-      <Animated.View
-        entering={ZoomIn.delay(300).springify()}
-        style={styles.lottieContainer}
-      >
-        <LinearGradient
-          colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.05)']}
-          style={styles.lottieGradient}
+      <Animated.View style={[styles.slideContent, animatedContentStyle]}>
+        <Animated.View
+          entering={FadeInDown.delay(100).springify()}
+          style={styles.tagContainer}
         >
-          {lottieSource ? (
-            <LottieView
-              ref={lottieRef}
-              source={lottieSource}
-              style={styles.lottie}
-              loop={true}
-              autoPlay={isActive}
-              resizeMode="contain"
-              speed={0.7}
-            />
-          ) : (
-            <View style={styles.fallbackIcon}>
-              <LinearGradient
-                colors={[slide.gradient[0], slide.gradient[1]]}
-                style={styles.fallbackGradient}
-              >
-                <Ionicons name={slide.icon} size={60} color={COLORS.white} />
-              </LinearGradient>
-            </View>
-          )}
-        </LinearGradient>
+          <LinearGradient
+            colors={[slide.gradient[0], slide.gradient[1]]}
+            style={styles.tagGradient}
+          >
+            <Ionicons name={slide.icon} size={14} color={COLORS.white} />
+            <Text style={styles.tagText}>{slide.tag}</Text>
+          </LinearGradient>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(200).springify()}>
+          {headlineParts.map((part: string, partIndex: number) => (
+            <Text key={partIndex} style={styles.headline}>
+              {part}
+            </Text>
+          ))}
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(250).springify()}>
+          <Text style={styles.subtitleText}>
+            Your trusted health companion
+          </Text>
+        </Animated.View>
+
+        <View style={styles.bodyContainer}>
+          <SmoothTypingText
+            text={slide.body}
+            style={styles.bodyText}
+            isActive={isActive}
+          />
+        </View>
+
+        <Animated.View
+          entering={FadeIn.delay(200)}
+          style={styles.counter}
+        >
+          <LinearGradient
+            colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
+            style={styles.counterGradient}
+          >
+            <Text style={styles.counterText}>
+              {String(index + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}
+            </Text>
+          </LinearGradient>
+        </Animated.View>
+
+        <View style={styles.lottieWrapper}>
+          <Animated.View
+            entering={ZoomIn.delay(300).springify()}
+            style={styles.lottieContainer}
+          >
+            <LinearGradient
+              colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.05)']}
+              style={styles.lottieGradient}
+            >
+              {lottieSource ? (
+                <LottieView
+                  ref={lottieRef}
+                  source={lottieSource}
+                  style={styles.lottie}
+                  loop={true}
+                  autoPlay={isActive}
+                  resizeMode="contain"
+                  speed={0.7}
+                />
+              ) : (
+                <View style={styles.fallbackIcon}>
+                  <LinearGradient
+                    colors={[slide.gradient[0], slide.gradient[1]]}
+                    style={styles.fallbackGradient}
+                  >
+                    <Ionicons name={slide.icon} size={60} color={COLORS.white} />
+                  </LinearGradient>
+                </View>
+              )}
+            </LinearGradient>
+          </Animated.View>
+        </View>
       </Animated.View>
     </View>
-  </Animated.View>
-  </View>
   );
 };
 
@@ -417,12 +410,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   slideContent: {
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACING.md,
     paddingTop: height * 0.05,
     paddingBottom: height * 0.05,
   },
   tagContainer: {
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   tagGradient: {
     flexDirection: 'row',
@@ -435,25 +428,37 @@ const styles = StyleSheet.create({
   },
   tagText: {
     color: COLORS.white,
-    fontSize: TYPOGRAPHY.sizes.xs,
-    fontFamily: TYPOGRAPHY.fonts.bold,
-    letterSpacing: 1.2,
+    fontSize: TYPOGRAPHY.sizes.sm,
+    fontFamily: TYPOGRAPHY.fonts.accent,
+    letterSpacing: 0.5,
   },
   headline: {
-    fontSize: 38,
+    fontSize: 42,
     fontFamily: TYPOGRAPHY.fonts.bold,
     color: COLORS.white,
-    lineHeight: 46,
-    letterSpacing: -0.3,
-    marginBottom: 4,
+    lineHeight: 50,
+    letterSpacing: -0.5,
+    marginBottom: 5,
+    textShadowColor: 'rgba(0,0,0,0.1)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 4,
+  },
+  subtitleText: {
+    fontSize: 18,
+    fontFamily: TYPOGRAPHY.fonts.accent,
+    color: 'rgba(255,255,255,0.95)',
+    marginBottom: SPACING.sm,
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.05)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   bodyContainer: {
-    minHeight: 80,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.sm,
   },
   bodyText: {
     fontSize: TYPOGRAPHY.sizes.md,
-    fontFamily: TYPOGRAPHY.fonts.regular,
+    fontFamily: TYPOGRAPHY.fonts.accent,
     color: 'rgba(255,255,255,0.85)',
     lineHeight: 24,
   },
@@ -462,30 +467,29 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   counter: {
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.sm,
     alignSelf: 'flex-start',
   },
   counterGradient: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.xs,
     borderRadius: 20,
   },
   counterText: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: TYPOGRAPHY.sizes.xs,
-    fontFamily: TYPOGRAPHY.fonts.semibold,
+    fontFamily: TYPOGRAPHY.fonts.accent,
     letterSpacing: 0.8,
   },
   lottieWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: SPACING.sm,
-    minHeight: width * 0.7,
+    marginTop: SPACING.xs,
   },
   lottieContainer: {
-    width: width * 0.8,
+    width: width * 0.9,
     height: width * 0.8,
-    borderRadius: 35,
+    borderRadius: 40,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
@@ -527,7 +531,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
   },
   logoContainer: {

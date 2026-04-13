@@ -1,0 +1,1039 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "supabase-webhook-qna",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e4476327-bece-491d-86eb-23a62259d24f",
+      "name": "Supabase Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [576, 528],
+      "webhookId": "bf645229-3e27-46c5-bd74-d26c5643d442"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.body.new.status}}",
+              "value2": "answered"
+            }
+          ]
+        }
+      },
+      "id": "4ace1e26-e27b-4337-a2b1-db867d933dcc",
+      "name": "IF — Is Answered?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [784, 528]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/pending_checkin_questions?id=eq.{{$json.body.new.id}}&select=*,patients(name,doctor_email,doctor_fcm_token,doctor_id)&limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ba2c5558-39c7-4a85-8454-f0173ef220fb",
+      "name": "Supabase — GET Doctor Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [992, 448]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://fcm.googleapis.com/fcm/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "key={{$env.FCM_SERVER_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"to\": \"{{$node[\"Supabase — GET Doctor Info\"].json[0].patients.doctor_fcm_token}}\",\n  \"notification\": {\n    \"title\": \"{{$node[\"Supabase — GET Doctor Info\"].json[0].patients.name}} answered your query\",\n    \"body\": \"{{$node[\"Supabase — GET Doctor Info\"].json[0].patient_answer}}\"\n  },\n  \"data\": {\n    \"patient_id\": \"{{$node[\"Supabase — GET Doctor Info\"].json[0].patient_id}}\",\n    \"question_id\": \"{{$node[\"Supabase — GET Doctor Info\"].json[0].id}}\",\n    \"action\": \"view_answer\"\n  }\n}",
+        "options": {}
+      },
+      "id": "efd58d6f-5c7e-403a-9c2d-f718ade82c57",
+      "name": "FCM — Notify Doctor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1184, 448]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/qna_response_log",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "question_id",
+              "value": "={{$node[\"Supabase — GET Doctor Info\"].json[0].id}}"
+            },
+            {
+              "name": "patient_id",
+              "value": "={{$node[\"Supabase — GET Doctor Info\"].json[0].patient_id}}"
+            },
+            {
+              "name": "doctor_id",
+              "value": "={{$node[\"Supabase — GET Doctor Info\"].json[0].patients.doctor_id}}"
+            },
+            {
+              "name": "original_question",
+              "value": "={{$node[\"Supabase — GET Doctor Info\"].json[0].original_doctor_question}}"
+            },
+            {
+              "name": "patient_answer",
+              "value": "={{$node[\"Supabase — GET Doctor Info\"].json[0].patient_answer}}"
+            },
+            {
+              "name": "notified_at",
+              "value": "={{$now}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-qna",
+      "name": "Supabase — Log QnA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1184, 560]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "doctor",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "332c25ed-163a-4fb9-b006-3686044d6ac0",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [1216, 736],
+      "webhookId": "eaff1270-ac25-443f-958e-d193de0733fa"
+    },
+    {
+      "parameters": {
+        "dataPropertyName": "action",
+        "rules": {
+          "rules": [
+            {
+              "value": "view"
+            },
+            {
+              "value": "ask"
+            },
+            {
+              "value": "family"
+            },
+            {
+              "value": "briefing"
+            }
+          ]
+        }
+      },
+      "id": "3b251550-0270-4753-845a-186b2473e369",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [1424, 736]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/agent/doctor-answer",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"question\": \"{{$json.question}}\",\n  \"patient_id\": \"{{$json.patient_id}}\",\n  \"full_context\": {\n    \"all_daily_summaries\": {{$node[\"Supabase — GET Full Context\"].json.daily_summaries}},\n    \"profile_summary\": \"{{$node[\"Supabase — GET Full Context\"].json.profile_summary}}\",\n    \"symptom_records\": {{$node[\"Supabase — GET Full Context\"].json.symptoms}},\n    \"adherence_log\": {{$node[\"Supabase — GET Full Context\"].json.adherence}},\n    \"wearable_flags\": {{$node[\"Supabase — GET Full Context\"].json.wearable_flags}},\n    \"prediction_data\": {{$node[\"Supabase — GET Full Context\"].json.prediction}}\n  }\n}",
+        "options": {}
+      },
+      "id": "79ff0afc-b79e-4de6-a99e-b42b638d492f",
+      "name": "Python — /agent/doctor-answer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1680, 736]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {}
+      },
+      "id": "82b7453f-af5d-44e1-b290-4fd79b8fff67",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1968, 736]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/safety/drug-interaction",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"new_medicine\": \"{{$json.new_medicine}}\",\n  \"active_medicines\": {{$node[\"Supabase — GET Active Meds\"].json}},\n  \"patient_conditions\": {{$node[\"Supabase — GET Patient Conditions\"].json[0].conditions}}\n}",
+        "options": {}
+      },
+      "id": "76932a83-6839-4535-ad5f-b9b8c1ef0a90",
+      "name": "Python — /safety/drug-interaction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1600, 1104]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.conflict_found}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "709c7785-1f6d-449b-91df-b730b76fa1d7",
+      "name": "IF — Conflict?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1808, 1104]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"blocked\": true,\n  \"warning\": \"{{$json.warning_text}}\",\n  \"severity_label\": \"{{$json.severity_label}}\",\n  \"medicine_risk_score\": {{$json.medicine_risk_score}},\n  \"recommendation\": \"{{$json.recommendation}}\",\n  \"source\": \"{{$json.source}}\"\n}",
+        "options": {}
+      },
+      "id": "7b67fb84-77bd-4f2f-a55a-459628cd428c",
+      "name": "Respond (Blocking)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2016, 1040]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/medicines",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "patient_id",
+              "value": "={{$node[\"Webhook1\"].json.patient_id}}"
+            },
+            {
+              "name": "medicine_name",
+              "value": "={{$node[\"Webhook1\"].json.new_medicine}}"
+            },
+            {
+              "name": "prescribed_at",
+              "value": "={{$now}}"
+            },
+            {
+              "name": "is_active",
+              "value": true
+            },
+            {
+              "name": "conflict_overridden",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "61fdbfdd-3b7a-4d3c-92ea-9d1bec34e4a8",
+      "name": "Supabase — POST Medicine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2016, 1200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "medicine/add",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "458655b7-484f-4989-a1a7-aa10b60ab9da",
+      "name": "Webhook1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [1216, 1104],
+      "webhookId": "41c74126-0585-4fa1-8b11-ac67b4f04f84"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/medicines?patient_id=eq.{{$json.patient_id}}&is_active=eq.true",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "meds-get",
+      "name": "Supabase — GET Active Meds",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1424, 1104]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/patients?patient_id=eq.{{$json.patient_id}}&select=conditions&limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "conditions-get",
+      "name": "Supabase — GET Patient Conditions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1424, 1168]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.endChat}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "2d61d32d-b250-4939-816a-9ca22d498cae",
+      "name": "IF — endChat?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [-320, 960]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/patients?patient_id=eq.{{$json.patient_id}}&limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f1468a53-d29c-4f78-9429-4e15a19a63b3",
+      "name": "Supabase — GET Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-112, 816]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/pending_checkin_questions?patient_id=eq.{{$json.patient_id}}&status=eq.pending",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "pending-get",
+      "name": "Supabase — GET Pending Questions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-112, 880]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/chat/message",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"message\": \"{{$node[\"Webhook2\"].json.message}}\",\n  \"patient_id\": \"{{$node[\"Webhook2\"].json.patient_id}}\",\n  \"session_id\": \"{{$node[\"Webhook2\"].json.session_id}}\",\n  \"patient_context\": {\n    \"rolling_summary\": \"{{$node[\"Supabase — GET Profile\"].json[0].rolling_summary}}\",\n    \"profile_summary\": \"{{$node[\"Supabase — GET Profile\"].json[0].profile_summary}}\",\n    \"last_7_summaries\": {{$node[\"Supabase — GET Profile\"].json[0].last_7_summaries}},\n    \"active_medications\": {{$node[\"Supabase — GET Profile\"].json[0].medications}},\n    \"pending_doctor_questions\": {{$node[\"Supabase — GET Pending Questions\"].json}}\n  }\n}",
+        "options": {}
+      },
+      "id": "9ee5fb3f-f935-435b-a8bf-f16f420acccd",
+      "name": "Python — /chat/message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [80, 816]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.save_ready}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "a09dfdad-5e4a-4757-8c94-5f8475b01e36",
+      "name": "IF — save_ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [288, 816]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/symptoms",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "patient_id",
+              "value": "={{$node[\"Webhook2\"].json.patient_id}}"
+            },
+            {
+              "name": "symptom_name",
+              "value": "={{$json.extracted_symptom.symptom}}"
+            },
+            {
+              "name": "body_zone",
+              "value": "={{$json.extracted_symptom.body_zone}}"
+            },
+            {
+              "name": "severity",
+              "value": "={{$json.extracted_symptom.severity}}"
+            },
+            {
+              "name": "onset",
+              "value": "={{$json.extracted_symptom.onset}}"
+            },
+            {
+              "name": "session_id",
+              "value": "={{$node[\"Webhook2\"].json.session_id}}"
+            },
+            {
+              "name": "created_at",
+              "value": "={{$now}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4c34094e-941e-4567-8efb-07428a1af614",
+      "name": "Supabase — POST Symptom",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 752]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/agent/escalate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"symptoms\": [{{$json.extracted_symptom}}],\n  \"patient_conditions\": {{$node[\"Supabase — GET Profile\"].json[0].conditions}},\n  \"age\": {{$node[\"Supabase — GET Profile\"].json[0].age}},\n  \"wearable_flags\": {{$node[\"Supabase — GET Profile\"].json[0].wearable_flags}},\n  \"message_context\": \"{{$node[\"Webhook2\"].json.message}}\"\n}",
+        "options": {}
+      },
+      "id": "escalate",
+      "name": "Python — /agent/escalate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 880]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "4c4bd5c5-0c38-4449-a6a7-8121b767dab2",
+      "name": "Webhook2",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-512, 960],
+      "webhookId": "9d2412c2-3dd5-416f-8b97-b94b93fc42dd"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"reply\": \"{{$node[\"Python — /chat/message\"].json.bot_reply}}\",\n  \"session_id\": \"{{$node[\"Webhook2\"].json.session_id}}\",\n  \"clarification_needed\": {{$node[\"Python — /chat/message\"].json.clarification_needed}},\n  \"confirmation_required\": {{$node[\"Python — /chat/message\"].json.confirmation_required}}\n}",
+        "options": {}
+      },
+      "id": "9c6c3276-fdaa-4d6d-ab4a-e4a1a7267ce0",
+      "name": "Respond to Webhook1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [640, 928]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "8311fabe-e601-4bf8-95b9-ce7a2882be9f",
+      "name": "Schedule — 8AM Check-in",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [96, 1264]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "eab7bc97-d24e-41b4-8f28-7464c2aea81d",
+      "name": "Schedule — 6-hourly Wearable",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [256, 1440]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "safety-alert",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "737e3e10-fcef-4618-b7cb-4d0fc21272e5",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [384, 1200],
+      "webhookId": "c5a19546-6226-4159-be0f-e683674cded0"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/doctor_alerts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "patient_id",
+              "value": "={{$json.patient_id}}"
+            },
+            {
+              "name": "risk_score",
+              "value": "={{$json.risk_score}}"
+            },
+            {
+              "name": "risk_level",
+              "value": "={{$json.risk_level}}"
+            },
+            {
+              "name": "risk_reason",
+              "value": "={{$json.risk_reason}}"
+            },
+            {
+              "name": "alert_type",
+              "value": "auto"
+            },
+            {
+              "name": "trigger",
+              "value": "={{$json.trigger}}"
+            },
+            {
+              "name": "created_at",
+              "value": "={{$now}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "63005e60-3348-48ff-bc97-1d2097e4c44f",
+      "name": "Supabase — POST doctor_alerts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [640, 1200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/daily_summaries?patient_id=eq.{{$json.patient_id}}&order=date.desc&limit=30",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "context-daily",
+      "name": "Supabase — GET Daily Summaries",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1552, 672]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/symptoms?patient_id=eq.{{$json.patient_id}}&order=created_at.desc&limit=30",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "context-symptoms",
+      "name": "Supabase — GET Symptoms",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1552, 736]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/patients?patient_id=eq.{{$json.patient_id}}&select=profile_summary&limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "context-profile",
+      "name": "Supabase — GET Profile Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1552, 800]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/adherence_log?patient_id=eq.{{$json.patient_id}}&order=taken_at.desc&limit=30",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "context-adherence",
+      "name": "Supabase — GET Adherence",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1552, 864]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/wearable_anomaly_flags?patient_id=eq.{{$json.patient_id}}&resolved=eq.false",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "context-wearable",
+      "name": "Supabase — GET Wearable Flags",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1552, 928]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/health_predictions?patient_id=eq.{{$json.patient_id}}&order=predicted_at.desc&limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "context-prediction",
+      "name": "Supabase — GET Prediction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1552, 992]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Assemble full context from all parallel GET requests\nconst dailySummaries = $input.all()[0].json;\nconst symptoms = $input.all()[1].json;\nconst profileSummary = $input.all()[2].json[0]?.profile_summary || '';\nconst adherence = $input.all()[3].json;\nconst wearableFlags = $input.all()[4].json;\nconst prediction = $input.all()[5].json[0] || {};\n\nreturn {\n  daily_summaries: dailySummaries.map(s => s.daily_summary),\n  symptoms: symptoms,\n  profile_summary: profileSummary,\n  adherence: adherence,\n  wearable_flags: wearableFlags,\n  prediction: prediction\n};"
+      },
+      "id": "context-assemble",
+      "name": "Assemble Full Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 672]
+    }
+  ],
+  "connections": {
+    "Supabase Webhook": {
+      "main": [[{"node": "IF — Is Answered?", "type": "main", "index": 0}]]
+    },
+    "IF — Is Answered?": {
+      "main": [[{"node": "Supabase — GET Doctor Info", "type": "main", "index": 0}]]
+    },
+    "Supabase — GET Doctor Info": {
+      "main": [
+        [{"node": "FCM — Notify Doctor", "type": "main", "index": 0}],
+        [{"node": "Supabase — Log QnA", "type": "main", "index": 0}]
+      ]
+    },
+    "Webhook": {
+      "main": [[{"node": "Switch", "type": "main", "index": 0}]]
+    },
+    "Switch": {
+      "main": [
+        [],
+        [
+          {"node": "Supabase — GET Daily Summaries", "type": "main", "index": 0},
+          {"node": "Supabase — GET Symptoms", "type": "main", "index": 0},
+          {"node": "Supabase — GET Profile Summary", "type": "main", "index": 0},
+          {"node": "Supabase — GET Adherence", "type": "main", "index": 0},
+          {"node": "Supabase — GET Wearable Flags", "type": "main", "index": 0},
+          {"node": "Supabase — GET Prediction", "type": "main", "index": 0}
+        ],
+        [],
+        []
+      ]
+    },
+    "Supabase — GET Daily Summaries": {
+      "main": [[{"node": "Assemble Full Context", "type": "main", "index": 0}]]
+    },
+    "Supabase — GET Symptoms": {
+      "main": [[{"node": "Assemble Full Context", "type": "main", "index": 0}]]
+    },
+    "Supabase — GET Profile Summary": {
+      "main": [[{"node": "Assemble Full Context", "type": "main", "index": 0}]]
+    },
+    "Supabase — GET Adherence": {
+      "main": [[{"node": "Assemble Full Context", "type": "main", "index": 0}]]
+    },
+    "Supabase — GET Wearable Flags": {
+      "main": [[{"node": "Assemble Full Context", "type": "main", "index": 0}]]
+    },
+    "Supabase — GET Prediction": {
+      "main": [[{"node": "Assemble Full Context", "type": "main", "index": 0}]]
+    },
+    "Assemble Full Context": {
+      "main": [[{"node": "Python — /agent/doctor-answer", "type": "main", "index": 0}]]
+    },
+    "Python — /agent/doctor-answer": {
+      "main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]
+    },
+    "Python — /safety/drug-interaction": {
+      "main": [[{"node": "IF — Conflict?", "type": "main", "index": 0}]]
+    },
+    "IF — Conflict?": {
+      "main": [
+        [{"node": "Respond (Blocking)", "type": "main", "index": 0}],
+        [{"node": "Supabase — POST Medicine", "type": "main", "index": 0}]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {"node": "Supabase — GET Active Meds", "type": "main", "index": 0},
+          {"node": "Supabase — GET Patient Conditions", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Supabase — GET Active Meds": {
+      "main": [[{"node": "Python — /safety/drug-interaction", "type": "main", "index": 0}]]
+    },
+    "Supabase — GET Patient Conditions": {
+      "main": [[{"node": "Python — /safety/drug-interaction", "type": "main", "index": 0}]]
+    },
+    "Supabase — POST Medicine": {
+      "main": [[{"node": "Respond (Blocking)", "type": "main", "index": 0}]]
+    },
+    "IF — endChat?": {
+      "main": [
+        [],
+        [
+          {"node": "Supabase — GET Profile", "type": "main", "index": 0},
+          {"node": "Supabase — GET Pending Questions", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Supabase — GET Profile": {
+      "main": [[{"node": "Python — /chat/message", "type": "main", "index": 0}]]
+    },
+    "Supabase — GET Pending Questions": {
+      "main": [[{"node": "Python — /chat/message", "type": "main", "index": 0}]]
+    },
+    "Python — /chat/message": {
+      "main": [[{"node": "IF — save_ready?", "type": "main", "index": 0}]]
+    },
+    "IF — save_ready?": {
+      "main": [
+        [
+          {"node": "Supabase — POST Symptom", "type": "main", "index": 0},
+          {"node": "Python — /agent/escalate", "type": "main", "index": 0}
+        ],
+        [{"node": "Respond to Webhook1", "type": "main", "index": 0}]
+      ]
+    },
+    "Supabase — POST Symptom": {
+      "main": [[{"node": "Python — /agent/escalate", "type": "main", "index": 0}]]
+    },
+    "Python — /agent/escalate": {
+      "main": [[{"node": "Respond to Webhook1", "type": "main", "index": 0}]]
+    },
+    "Webhook2": {
+      "main": [[{"node": "IF — endChat?", "type": "main", "index": 0}]]
+    },
+    "Webhook Trigger": {
+      "main": [[{"node": "Supabase — POST doctor_alerts", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "local-docker-n8n",
+    "templateCredsSetupCompleted": true
+  }
+}

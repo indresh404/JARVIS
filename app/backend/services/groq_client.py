@@ -1,0 +1,41 @@
+import httpx
+import os
+import json
+from dotenv import load_dotenv
+
+load_dotenv()
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+async def call_groq(system_prompt: str, user_prompt: str, max_tokens: int = 1024, temperature: float = 0.1) -> str:
+    """
+    Single async function to call Groq API.
+    Always requests JSON mode via the prompt and system config.
+    """
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "response_format": {"type": "json_object"}
+    }
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            response = await client.post(GROQ_URL, headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+        except Exception as e:
+            print(f"Groq API Error: {e}")
+            # Return a minimal valid JSON error if possible
+            return json.dumps({"error": "LLM unavailable", "exception": str(e)})

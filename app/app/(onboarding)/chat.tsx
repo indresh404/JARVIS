@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useAuthStore } from '@/store/auth.store';
+import { supabase } from '@/services/supabaseClient';
 
 interface Message {
   id: string;
@@ -34,6 +36,29 @@ export default function ChatScreen() {
   ]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { user } = useAuthStore();
+  const [userName, setUserName] = useState('User');
+
+  useEffect(() => {
+    if (user) {
+      fetchUserName();
+    }
+  }, [user]);
+
+  const fetchUserName = async () => {
+    const { data } = await supabase
+      .from('users')
+      .select('name')
+      .eq('id', user?.id)
+      .single();
+    if (data?.name) setUserName(data.name);
+  };
+
+  const getUserInitials = () => {
+    if (!userName) return 'U';
+    return userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  };
+
   const flatListRef = useRef<FlatList>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -113,7 +138,7 @@ export default function ChatScreen() {
       </View>
       {item.isUser && (
         <View style={styles.userAvatar}>
-          <Text style={styles.userAvatarText}>RS</Text>
+          <Text style={styles.userAvatarText}>{getUserInitials()}</Text>
         </View>
       )}
     </View>

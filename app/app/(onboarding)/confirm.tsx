@@ -1,47 +1,79 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/shared/ScreenWrapper';
 import { Button } from '@/components/ui/Button';
 import { COLORS, GRADIENTS, SPACING, TYPOGRAPHY } from '@/theme';
-
-const data = [
-  ['Name', 'Rahul Sharma'],
-  ['Age', '36'],
-  ['Conditions', 'Hypertension'],
-  ['Medicines', 'Telmisartan'],
-  ['Allergies', 'None'],
-  ['Family History', 'Diabetes'],
-];
+import { supabase } from '@/services/supabaseClient';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function ConfirmScreen() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const { user } = useAuthStore();
+  const [profile, setProfile] = useState<any>(null);
+
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+    }
+  }, [user]);
+
+  const fetchProfile = async () => {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user?.id)
+      .single();
+    
+    if (data) setProfile(data);
+  };
+
+  const getProfileData = () => [
+    ['Name', profile?.name || 'Loading...'],
+    ['Age', profile?.age?.toString() || '—'],
+    ['Conditions', profile?.conditions || 'None'],
+    ['Medicines', profile?.medications || 'None'],
+    ['Allergies', profile?.allergies || 'None'],
+    ['Family History', profile?.family_history || 'None'],
+  ];
   return (
     <ScreenWrapper>
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 24 }}>
         <Text style={styles.title}>Your Health Profile</Text>
         <LinearGradient colors={GRADIENTS.surface} style={styles.card}>
-          {data.map(([label, value]) => (
+          {getProfileData().map(([label, value]) => (
             <View key={label} style={styles.row}>
               <Text style={styles.label}>{label}</Text>
               <Text style={styles.value}>{value}</Text>
             </View>
           ))}
         </LinearGradient>
-        <Button title="Edit" variant="outline" />
+        <Button title="Edit" variant="outline" onPress={() => router.back()} />
         <Button title="Confirm & Continue" style={{ marginTop: 12 }} onPress={() => setOpen(true)} />
       </ScrollView>
       <Modal visible={open} transparent animationType="slide">
         <View style={styles.sheetWrap}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Set up your family group</Text>
-            <Pressable style={styles.option}>
+            <Pressable 
+              style={styles.option}
+              onPress={() => {
+                setOpen(false);
+                router.push('/(onboarding)/family-setup');
+              }}
+            >
               <Text style={styles.optTitle}>Create Family Group</Text>
               <Text style={styles.optSub}>Start a new family group and invite members</Text>
             </Pressable>
-            <Pressable style={styles.option}>
+            <Pressable 
+              style={styles.option}
+              onPress={() => {
+                setOpen(false);
+                router.push('/(onboarding)/family-setup');
+              }}
+            >
               <Text style={styles.optTitle}>Join Existing Family</Text>
               <Text style={styles.optSub}>Enter a family code to join your family</Text>
             </Pressable>

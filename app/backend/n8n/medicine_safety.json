@@ -1,0 +1,134 @@
+{
+  "name": "Medicine Safety",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "medicine/add",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.PYTHON_API_URL}}/safety/drug-interaction",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "new_medicine", "value": "={{$json.new_medicine}}" },
+            { "name": "active_medicines", "value": "=[]" },
+            { "name": "patient_conditions", "value": "=[]" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "python-safety",
+      "name": "Python — /safety/drug-interaction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.conflict_found}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-conflict",
+      "name": "IF — Conflict?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$node[\"Python — /safety/drug-interaction\"].json}}",
+        "options": {}
+      },
+      "id": "respond-blocking",
+      "name": "Respond (Blocking)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [950, 250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/medicines",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "patient_id", "value": "={{$node[\"Webhook\"].json.patient_id}}" },
+            { "name": "medicine_name", "value": "={{$node[\"Webhook\"].json.new_medicine}}" },
+            { "name": "is_active", "value": true }
+          ]
+        },
+        "options": {}
+      },
+      "id": "supabase-save",
+      "name": "Supabase — POST Medicine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [950, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Python — /safety/drug-interaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Python — /safety/drug-interaction": {
+      "main": [
+        [
+          {
+            "node": "IF — Conflict?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Conflict?": {
+      "main": [
+        [
+          {
+            "node": "Respond (Blocking)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase — POST Medicine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null,
+  "meta": {
+    "templateId": null
+  },
+  "pinData": {}
+}

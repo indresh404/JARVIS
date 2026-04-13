@@ -5,6 +5,9 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
+import { supabase } from '@/services/supabaseClient';
+import { useAuthStore } from '@/store/auth.store';
+
 import {
   Alert,
   KeyboardAvoidingView,
@@ -41,14 +44,91 @@ export default function FamilySetupScreen() {
 
   const handleBack = () => router.back();
 
-  const handleCreate = () => router.push('/(tabs)/home');
+  const handleCreate = async () => {
+    const { user } = useAuthStore.getState();
+    if (!user) {
+      Alert.alert('Error', 'No authenticated user found');
+      return;
+    }
 
-  const handleJoin = () => {
-    const code = codeDigits.join('');
-    if (code.length === CODE_LENGTH) {
+    try {
+      const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      const { data: family, error: familyError } = await supabase.from('families').insert({
+        family_name: `${useAuthStore.getState().user?.email?.split('@')[0] || 'My'} Family`,
+        created_by: user.id,
+        join_code: joinCode,
+      }).select().single();
+
+      if (familyError || !family) {
+        Alert.alert('Error Creating Family', familyError?.message || 'Failed to create family');
+        return;
+      }
+
+      const { error: groupError } = await supabase.from('family_groups').insert({
+        family_id: family.id,
+        patient_id: user.id,
+        role: 'admin',
+      });
+
+
+      if (groupError) {
+        Alert.alert('Error Joining Group', groupError.message);
+        return;
+      }
+
+      useAuthStore.getState().setHasFamilyGroup(true);
       router.push('/(tabs)/home');
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred while creating family');
     }
   };
+
+  const handleJoin = async () => {
+    const { user } = useAuthStore.getState();
+    if (!user) {
+      Alert.alert('Error', 'No authenticated user found');
+      return;
+    }
+
+    const code = codeDigits.join('').toUpperCase();
+    if (code.length !== CODE_LENGTH) {
+      Alert.alert('Error', 'Please enter a valid 6-digit code');
+      return;
+    }
+
+    try {
+      // Find family by join_code
+      const { data: family, error: familyError } = await supabase
+        .from('families')
+        .select('id')
+        .eq('join_code', code)
+        .single();
+
+      if (familyError || !family) {
+        Alert.alert('Error Joining Family', 'Invalid family code');
+        return;
+      }
+
+      // Add user to family_groups
+      const { error: groupError } = await supabase.from('family_groups').insert({
+        family_id: family.id,
+        patient_id: user.id,
+        role: 'member',
+      });
+
+      if (groupError) {
+        Alert.alert('Error Joining Family', groupError.message);
+        return;
+      }
+
+      useAuthStore.getState().setHasFamilyGroup(true);
+      router.push('/(tabs)/home');
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred while joining family');
+    }
+  };
+
 
   const handleQRScan = async () => {
     const { status } = await requestPermission();

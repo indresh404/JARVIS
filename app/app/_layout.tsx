@@ -12,10 +12,17 @@ import {
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import 'react-native-reanimated';
+
 import { Loader } from '@/components/ui/Loader';
+import { supabase } from '@/services/supabaseClient';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function RootLayout() {
+  const setSession = useAuthStore((state) => state.setSession);
+  const logout = useAuthStore((state) => state.logout);
+
   const [loaded] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
@@ -24,6 +31,24 @@ export default function RootLayout() {
     Poppins_300Light,
     Delius_400Regular,
   });
+
+  useEffect(() => {
+    // Check current session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setSession(session);
+      } else {
+        logout();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [logout, setSession]);
 
   if (!loaded) return <Loader text="Loading Swasthya AI..." />;
 

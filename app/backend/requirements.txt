@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+supabase
+PyJWT
+python-dotenv
+python-multipart
+groq
+qrcode
+pypng
+sentence-transformers
+scikit-learn
+torch
+transformers
+pydantic
+psycopg2-binary
+numpy
+pandas

@@ -1,5 +1,8 @@
 // app/_layout.tsx
 import {
+  Delius_400Regular,
+} from '@expo-google-fonts/delius';
+import {
   Poppins_300Light,
   Poppins_400Regular,
   Poppins_500Medium,
@@ -10,6 +13,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { Loader } from '@/components/ui/Loader';
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -18,9 +22,10 @@ export default function RootLayout() {
     Poppins_600SemiBold,
     Poppins_700Bold,
     Poppins_300Light,
+    Delius_400Regular,
   });
 
-  if (!loaded) return null;
+  if (!loaded) return <Loader text="Loading Swasthya AI..." />;
 
   return (
     <>

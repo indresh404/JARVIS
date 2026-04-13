@@ -6,6 +6,7 @@ export const TYPOGRAPHY = {
     semibold: 'Poppins_600SemiBold',
     bold: 'Poppins_700Bold',
     light: 'Poppins_300Light',
+    accent: 'Delius_400Regular',
   },
   sizes: {
     xs: 11,

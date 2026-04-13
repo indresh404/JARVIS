@@ -7,7 +7,6 @@ import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
   Alert,
-  Dimensions,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -28,14 +27,13 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 
-const { width } = Dimensions.get('window');
 const CODE_LENGTH = 6;
 
 export default function FamilySetupScreen() {
   const router = useRouter();
   const [codeDigits, setCodeDigits] = useState<string[]>(Array(CODE_LENGTH).fill(''));
   const [showQRScanner, setShowQRScanner] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
+  const [, requestPermission] = useCameraPermissions();
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   const scaleCreate = useSharedValue(1);
@@ -62,13 +60,10 @@ export default function FamilySetupScreen() {
   };
 
   const handleBarCodeScanned = (result: any) => {
-    // Extract the code from QR (assuming the QR contains the family code)
     const scannedCode = result.data;
-    // Extract only the last 6 digits if the code is longer
     const code = scannedCode.slice(-6);
     const digits = code.split('');
     
-    // Fill the code inputs
     const newDigits = [...codeDigits];
     for (let i = 0; i < Math.min(digits.length, CODE_LENGTH); i++) {
       if (digits[i] && /^\d$/.test(digits[i])) {
@@ -78,7 +73,6 @@ export default function FamilySetupScreen() {
     setCodeDigits(newDigits);
     setShowQRScanner(false);
     
-    // Auto-join if code is complete
     if (newDigits.every(d => d !== '')) {
       setTimeout(() => {
         router.push('/(tabs)/home');
@@ -86,7 +80,6 @@ export default function FamilySetupScreen() {
     }
   };
 
-  // Code input logic
   const handleCodeChange = (index: number, value: string) => {
     const char = value.replace(/[^0-9]/g, '').slice(-1);
     const newDigits = [...codeDigits];
@@ -143,7 +136,7 @@ export default function FamilySetupScreen() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <LinearGradient
-        colors={['#2563eb', '#1e40af', '#1e3a8a']}
+        colors={['#116acf', '#116acf', '#4da0fe']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}
@@ -169,17 +162,28 @@ export default function FamilySetupScreen() {
               >
                 <Ionicons name="arrow-back" size={24} color="#ffffff" />
               </TouchableOpacity>
-              <Text style={styles.headerTitle}>Vitality</Text>
+              <Text style={styles.headerTitle}>Swasthya AI</Text>
               <View style={styles.headerSpacer} />
             </View>
 
-            {/* Welcome */}
+            {/* Step Indicator */}
+            <Animated.View 
+              entering={FadeInDown.delay(50).springify()}
+              style={styles.stepContainer}
+            >
+              <Text style={styles.stepText}>Step 2 of 2</Text>
+              <View style={styles.progressBar}>
+                <View style={styles.progressFill} />
+              </View>
+            </Animated.View>
+
+            {/* Welcome - With Cursive Font */}
             <Animated.View
               entering={FadeInDown.delay(100).springify()}
               style={styles.welcomeSection}
             >
               <Text style={styles.mainTitle}>Welcome Home</Text>
-              <Text style={styles.mainSubtitle}>
+              <Text style={[styles.mainSubtitle, styles.cursiveText]}>
                 Synchronize your health journey with those who matter most.
               </Text>
             </Animated.View>
@@ -197,7 +201,7 @@ export default function FamilySetupScreen() {
                   <View style={styles.cardTextSection}>
                     <Text style={styles.cardTitle}>Create your Wonder Family</Text>
                     <Text style={styles.cardDescription}>
-                      Start a new private hub for your family's health data and goal tracking.
+                      Start a new private hub for your family&apos;s health data and goal tracking.
                     </Text>
                   </View>
                   <View style={styles.cardIconBox}>
@@ -244,9 +248,7 @@ export default function FamilySetupScreen() {
                   <View style={styles.codeInputRow}>
                     {codeDigits.map((digit, index) => (
                       <React.Fragment key={index}>
-                        {index === 3 && (
-                          <View style={styles.separatorDot} />
-                        )}
+                        {index === 3 && <View style={styles.separatorDot} />}
                         <TextInput
                           ref={(el) => { inputRefs.current[index] = el; }}
                           style={[
@@ -270,7 +272,6 @@ export default function FamilySetupScreen() {
 
                   {/* Action row */}
                   <View style={styles.actionRow}>
-                    {/* QR Scan Button */}
                     <TouchableOpacity
                       style={styles.qrButton}
                       onPress={handleQRScan}
@@ -280,29 +281,36 @@ export default function FamilySetupScreen() {
                       <Text style={styles.qrButtonText}>Scan QR</Text>
                     </TouchableOpacity>
 
-                    {/* Join Button */}
+                    {/* Join Button - Changes color when code is complete */}
                     <TouchableOpacity
                       style={[
                         styles.joinButton,
-                        !isCodeComplete && styles.joinButtonDisabled,
+                        isCodeComplete ? styles.joinButtonActive : styles.joinButtonDisabled,
                       ]}
                       onPress={handleJoin}
                       activeOpacity={0.8}
                       disabled={!isCodeComplete}
                     >
-                      <Text
-                        style={[
-                          styles.joinButtonText,
-                          !isCodeComplete && styles.joinButtonTextDisabled,
-                        ]}
+                      <LinearGradient
+                        colors={isCodeComplete ? ['#10b981', '#059669'] : ['#e7e7f3', '#e7e7f3']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.joinButtonGradient}
                       >
-                        Join
-                      </Text>
-                      <Ionicons
-                        name="arrow-forward"
-                        size={16}
-                        color={isCodeComplete ? '#116acf' : '#a0a3b8'}
-                      />
+                        <Text
+                          style={[
+                            styles.joinButtonText,
+                            isCodeComplete ? styles.joinButtonTextActive : styles.joinButtonTextDisabled,
+                          ]}
+                        >
+                          Join
+                        </Text>
+                        <Ionicons
+                          name="arrow-forward"
+                          size={18}
+                          color={isCodeComplete ? '#ffffff' : '#a0a3b8'}
+                        />
+                      </LinearGradient>
                     </TouchableOpacity>
                   </View>
                 </Animated.View>
@@ -375,8 +383,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 28,
-    marginTop: 4,
+    marginBottom: 24,
   },
   backButton: {
     width: 40,
@@ -394,63 +401,93 @@ const styles = StyleSheet.create({
   },
   headerSpacer: { width: 40 },
 
+  // Step Indicator
+  stepContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  stepText: {
+    fontSize: 14,
+    fontFamily: TYPOGRAPHY.fonts.medium,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 8,
+  },
+  progressBar: {
+    width: '60%',
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 2,
+  },
+
   // Welcome
   welcomeSection: {
     alignItems: 'center',
     marginBottom: 32,
   },
   mainTitle: {
-    fontSize: 36,
+    fontSize: 34,
     fontFamily: TYPOGRAPHY.fonts.bold,
     color: '#ffffff',
     marginBottom: 8,
     textAlign: 'center',
   },
   mainSubtitle: {
-    fontSize: 16,
+    fontSize: 20,
     fontFamily: TYPOGRAPHY.fonts.medium,
-    color: 'rgba(238,239,255,0.8)',
+    color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
+  },
+  cursiveText: {
+    fontFamily: TYPOGRAPHY.fonts.accent,
+    fontSize: 20,
+    color: 'rgba(255,255,255,0.9)',
   },
 
-  // Cards
+  // Cards - KEPT SAME SIZE
   card: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
+    borderRadius: 20,
     marginBottom: 16,
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.12,
-    shadowRadius: 32,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    elevation: 6,
   },
   cardContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   cardTextSection: { flex: 1, marginRight: 12 },
   cardTitle: {
     fontSize: 18,
     fontFamily: TYPOGRAPHY.fonts.bold,
     color: '#116acf',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   cardDescription: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: TYPOGRAPHY.fonts.regular,
     color: '#434655',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   cardIconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
+    width: 52,
+    height: 52,
+    borderRadius: 14,
     backgroundColor: '#dbe1ff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -462,13 +499,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    marginTop: 6,
   },
   cardButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: TYPOGRAPHY.fonts.bold,
     color: '#ffffff',
   },
@@ -479,12 +516,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   codeInput: {
-    width: 42,
-    height: 50,
-    borderRadius: 10,
+    width: 44,
+    height: 52,
+    borderRadius: 12,
     backgroundColor: '#f3f3fe',
     fontSize: 20,
     fontFamily: TYPOGRAPHY.fonts.bold,
@@ -508,7 +545,7 @@ const styles = StyleSheet.create({
   // Action Row
   actionRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
     alignItems: 'center',
   },
   qrButton: {
@@ -516,9 +553,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 13,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#eef4ff',
     borderWidth: 1.5,
     borderColor: '#d0e2ff',
@@ -530,22 +567,33 @@ const styles = StyleSheet.create({
   },
   joinButton: {
     flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  joinButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: '#e7e7f3',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   joinButtonDisabled: {
-    backgroundColor: '#f3f3f8',
+    opacity: 0.7,
+  },
+  joinButtonActive: {
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   joinButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: TYPOGRAPHY.fonts.bold,
-    color: '#116acf',
+  },
+  joinButtonTextActive: {
+    color: '#ffffff',
   },
   joinButtonTextDisabled: {
     color: '#a0a3b8',

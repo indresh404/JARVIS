@@ -1,63 +1,116 @@
-import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+// app/(tabs)/meds/index.tsx
+import { ScreenIntroGate } from '@/components/ui/ScreenIntroGate';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, StatusBar, Platform, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenWrapper } from '@/components/shared/ScreenWrapper';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { COLORS, SPACING, TYPOGRAPHY } from '@/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSegments } from 'expo-router';
+
+const TopNavBar = ({ 
+  onScanPress, 
+  onNotificationPress, 
+  onProfilePress, 
+  notificationCount = 3, 
+  userName = 'Rahul',
+  activeScreen = 'meds'
+}: any) => {
+  const getTitle = () => {
+    switch(activeScreen) {
+      case 'home': return 'DASHBOARD';
+      case 'checkin': return 'CHECK-IN';
+      case 'meds': return 'MEDICATIONS';
+      case 'profile': return 'PROFILE';
+      default: return 'MEDICATIONS';
+    }
+  };
+
+  return (
+    <View style={styles.topNavContainer}>
+      <View style={styles.topNavBar}>
+        <TouchableOpacity activeOpacity={0.8} onPress={onScanPress} style={styles.leftButton}>
+          <LinearGradient colors={['#0474FC', '#0360D0']} style={styles.gradientButton}>
+            <Ionicons name="scan-outline" size={22} color="#FFFFFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <View style={styles.centerPill}>
+          <View style={styles.pillContent}>
+            <View style={styles.blueDot} />
+            <Text style={styles.pillText}>{getTitle()}</Text>
+          </View>
+        </View>
+
+        <View style={styles.rightSection}>
+          <TouchableOpacity activeOpacity={0.8} onPress={onNotificationPress} style={styles.iconButton}>
+            <View style={styles.iconContainer}>
+              <Ionicons name="notifications-outline" size={22} color="#374151" />
+              {notificationCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.badgeText}>{notificationCount > 9 ? '9+' : notificationCount}</Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity activeOpacity={0.8} onPress={onProfilePress} style={styles.avatarButton}>
+            <LinearGradient colors={['#0474FC', '#0360D0']} style={styles.avatarGradient}>
+              <Text style={styles.avatarText}>{userName[0]}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+};
 
 export default function MedsScreen() {
-  const [open, setOpen] = useState(false);
+  const segments = useSegments();
+  const currentRoute = segments[segments.length - 1];
+  
   return (
-    <ScreenWrapper>
-      <ScrollView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>My Medicines</Text>
-          <Button title="Add Medicine" size="sm" onPress={() => setOpen(true)} />
-        </View>
-        <Card style={{ marginTop: SPACING.md }}>
-          <Text style={styles.medName}>Metformin 500mg</Text>
-          <Text style={styles.meta}>8:00 AM</Text>
-          <Pressable style={styles.mark}>
-            <Ionicons name="checkmark-circle" size={18} color={COLORS.green[500]} />
-            <Text style={styles.markText}>Mark Taken</Text>
-          </Pressable>
-        </Card>
-        <Text style={styles.section}>Medicine History</Text>
-        <Card>
-          <Text style={styles.meta}>Adherence rate: 87%</Text>
-          <View style={styles.barBg}>
-            <View style={styles.barFill} />
-          </View>
-        </Card>
-      </ScrollView>
-      <Modal visible={open} animationType="slide" transparent>
-        <View style={styles.modalWrap}>
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Add Medicine</Text>
-            <Input placeholder="Medicine name" />
-            <Button title="Check Conflicts" style={{ marginTop: SPACING.md }} />
-            <Button title="Close" variant="ghost" onPress={() => setOpen(false)} style={{ marginTop: SPACING.sm }} />
-          </View>
-        </View>
-      </Modal>
-    </ScreenWrapper>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+      <TopNavBar 
+        onScanPress={() => console.log('Scan pressed')}
+        onNotificationPress={() => console.log('Notification pressed')}
+        onProfilePress={() => console.log('Profile pressed')}
+        notificationCount={3}
+        userName="Rahul"
+        activeScreen={currentRoute}
+      />
+      <ScreenIntroGate
+        loaderText="Loading medication details..."
+        loaderDuration={3000}
+        backgroundColor="#F9FAFB"
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Text style={styles.title}>Medications Screen</Text>
+          <Text style={styles.subtitle}>Your medications will appear here</Text>
+        </ScrollView>
+      </ScreenIntroGate>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.surface, padding: SPACING.md },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { color: COLORS.blue[900], fontFamily: TYPOGRAPHY.fonts.bold, fontSize: TYPOGRAPHY.sizes.xxl },
-  medName: { color: COLORS.text.primary, fontFamily: TYPOGRAPHY.fonts.semibold, fontSize: TYPOGRAPHY.sizes.lg },
-  meta: { color: COLORS.text.muted, marginTop: 6 },
-  mark: { marginTop: SPACING.md, flexDirection: 'row', gap: 6, alignItems: 'center' },
-  markText: { color: COLORS.green[500], fontFamily: TYPOGRAPHY.fonts.semibold },
-  section: { marginTop: SPACING.lg, marginBottom: SPACING.sm, color: COLORS.blue[900], fontFamily: TYPOGRAPHY.fonts.bold },
-  barBg: { marginTop: 10, height: 10, borderRadius: 8, backgroundColor: COLORS.gray[100] },
-  barFill: { width: '87%', height: 10, borderRadius: 8, backgroundColor: COLORS.green[500] },
-  modalWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: `${COLORS.blue[900]}66` },
-  sheet: { backgroundColor: COLORS.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: SPACING.lg },
-  sheetTitle: { color: COLORS.blue[900], fontFamily: TYPOGRAPHY.fonts.bold, fontSize: TYPOGRAPHY.sizes.xl, marginBottom: SPACING.md },
+  safeArea: { flex: 1, backgroundColor: '#F9FAFB' },
+  scrollContent: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#111827', marginBottom: 10 },
+  subtitle: { fontSize: 16, color: '#6B7280' },
+  topNavContainer: { paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 12, backgroundColor: '#F9FAFB' },
+  topNavBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 5 },
+  leftButton: { shadowColor: '#0474FC', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
+  gradientButton: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  centerPill: { flex: 1, marginHorizontal: 12 },
+  pillContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 20 },
+  blueDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#0474FC', marginRight: 8 },
+  pillText: { fontSize: 13, fontWeight: '600', letterSpacing: 1.2, color: '#1F2937' },
+  rightSection: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconButton: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  iconContainer: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#F9FAFB', alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  notificationBadge: { position: 'absolute', top: 6, right: 6, backgroundColor: '#EF4444', borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 1.5, borderColor: '#FFFFFF' },
+  badgeText: { color: '#FFFFFF', fontSize: 9, fontWeight: '700' },
+  avatarButton: { shadowColor: '#0474FC', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
+  avatarGradient: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 18, fontWeight: '600', color: '#FFFFFF' },
 });

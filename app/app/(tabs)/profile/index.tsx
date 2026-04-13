@@ -1,21 +1,22 @@
 // app/(tabs)/profile/index.tsx
 import { ScreenIntroGate } from '@/components/ui/ScreenIntroGate';
-import React from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
-  Share,
-  Alert,
-  Platform,
-} from 'react-native';
+import { SkeletonProfileScreen } from '@/components/ui/SkeletonLoader';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSegments } from 'expo-router';
+import React, { useState } from 'react';
+import {
+    Alert,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    Share,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
 // Color System with Primary #0474FC
 const COLORS = {
@@ -109,6 +110,28 @@ const TopNavBar = ({
 export default function ProfileScreen() {
   const segments = useSegments();
   const currentRoute = segments[segments.length - 1];
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Skeleton loading timeout: 4 seconds fixed duration
+  const SKELETON_DURATION = 4000; // 4 seconds
+  const MAX_SKELETON_TIME = 240000; // 4 minutes max timeout
+
+  const handleIntroComplete = () => {
+    // Hide skeleton after fixed 4 seconds duration
+    const skeletonTimeout = setTimeout(() => {
+      setIsDataLoaded(true);
+    }, SKELETON_DURATION);
+
+    // Safety: force show content after 4 minutes max
+    const maxTimeoutTimer = setTimeout(() => {
+      setIsDataLoaded(true);
+    }, MAX_SKELETON_TIME);
+
+    return () => {
+      clearTimeout(skeletonTimeout);
+      clearTimeout(maxTimeoutTimer);
+    };
+  };
 
   const handleShareQR = async () => {
     try {
@@ -165,11 +188,15 @@ export default function ProfileScreen() {
         loaderText="Loading your profile..."
         loaderDuration={3000}
         backgroundColor={COLORS.background}
+        onIntroComplete={handleIntroComplete}
       >
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+        {!isDataLoaded ? (
+          <SkeletonProfileScreen />
+        ) : (
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
         >
         {/* A. Identity + QR Card */}
         <View style={styles.identityCard}>
@@ -390,6 +417,7 @@ export default function ProfileScreen() {
 
           <View style={styles.bottomPadding} />
         </ScrollView>
+        )}
       </ScreenIntroGate>
     </SafeAreaView>
   );

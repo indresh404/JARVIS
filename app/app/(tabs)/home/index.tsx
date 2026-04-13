@@ -1,4 +1,7 @@
 // app/(tabs)/home/index.tsx
+import { BodyMapVisualization3D } from '@/components/bodymap/BodyMapVisualization3D';
+import { BodyMapCard } from '@/components/home/BodyMapCard';
+import { GovernmentSchemeCard } from '@/components/home/GovernmentSchemeCard';
 import { ScreenIntroGate } from '@/components/ui/ScreenIntroGate';
 import React from 'react';
 import { 
@@ -22,7 +25,7 @@ const TopNavBar = ({
   onNotificationPress, 
   onProfilePress, 
   notificationCount = 3, 
-  userName = 'Rahul',
+  userName = 'Indresh',
   activeScreen = 'DASHBOARD'
 }: any) => {
   // Get the title based on active screen
@@ -123,6 +126,33 @@ const AIChatButton = () => {
 export default function HomeScreen() {
   const segments = useSegments();
   const currentRoute = segments[segments.length - 1];
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [bodyMapVisible, setBodyMapVisible] = useState(false);
+
+  // Skeleton loading timeout: 4 seconds fixed duration
+  const SKELETON_DURATION = 4000; // 4 seconds
+  const MAX_SKELETON_TIME = 90000; // 4 minutes max timeout
+  const skeletonStartTime = React.useRef<number>(Date.now());
+
+  const handleIntroComplete = () => {
+    // Start skeleton loading after intro animation
+    skeletonStartTime.current = Date.now();
+    
+    // Hide skeleton after fixed 4 seconds duration
+    const skeletonTimeout = setTimeout(() => {
+      setIsDataLoaded(true);
+    }, SKELETON_DURATION);
+
+    // Safety: force show content after 4 minutes max
+    const maxTimeoutTimer = setTimeout(() => {
+      setIsDataLoaded(true);
+    }, MAX_SKELETON_TIME);
+
+    return () => {
+      clearTimeout(skeletonTimeout);
+      clearTimeout(maxTimeoutTimer);
+    };
+  };
   
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -144,17 +174,54 @@ export default function HomeScreen() {
         introSource={require('../../../assets/lottie_animations/heart_animation.json')}
         introText="Tracking your heartbeat and getting everything ready"
         backgroundColor="#F9FAFB"
+        onIntroComplete={handleIntroComplete}
       >
-        <ScrollView 
-          style={styles.container} 
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.content}>
-            <Text style={styles.welcomeText}>Welcome to Your Health Dashboard</Text>
-            {/* Rest of your existing home screen components */}
-          </View>
-        </ScrollView>
+        {!isDataLoaded ? (
+          <SkeletonHomeScreen />
+        ) : (
+          <>
+            <ScrollView 
+              style={styles.container} 
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.content}>
+                {/* Welcome Section */}
+                <View style={styles.welcomeSection}>
+                  <View style={styles.welcomeHeader}>
+                    <View style={styles.shieldIcon}>
+                      <Ionicons name="shield-checkmark" size={16} color="#0474FC" />
+                    </View>
+                    <Text style={styles.welcomeSubtitle}>CLINICAL HEALTH ID: #SW-9431</Text>
+                  </View>
+                  <Text style={styles.welcomeTitle}>Welcome back, Rahul</Text>
+                  <Text style={styles.welcomeDescription}>Your individualized health intelligence hub is ready</Text>
+                </View>
+
+                {/* Government Scheme Card */}
+                <GovernmentSchemeCard />
+
+                {/* 3D Body Map Card */}
+                <BodyMapCard onPress={() => setBodyMapVisible(true)} />
+
+                {/* Additional Content Areas */}
+                <View style={styles.contentSection}>
+                  <Text style={styles.sectionTitle}>Health Status</Text>
+                  <Text style={styles.placeholderText}>More health components coming soon...</Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Body Map Modal */}
+            <BodyMapVisualization3D 
+              visible={bodyMapVisible} 
+              onClose={() => setBodyMapVisible(false)} 
+            />
+
+            {/* AI Chat Button - Floating */}
+            <AIChatButton />
+          </>
+        )}
       </ScreenIntroGate>
     </SafeAreaView>
   );
@@ -169,7 +236,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   content: {
     padding: 20,

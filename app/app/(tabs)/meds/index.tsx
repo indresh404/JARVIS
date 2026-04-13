@@ -1,10 +1,11 @@
 // app/(tabs)/meds/index.tsx
 import { ScreenIntroGate } from '@/components/ui/ScreenIntroGate';
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, StatusBar, Platform, TouchableOpacity } from 'react-native';
+import { SkeletonMedsScreen } from '@/components/ui/SkeletonLoader';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSegments } from 'expo-router';
+import React, { useState } from 'react';
+import { Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const TopNavBar = ({ 
   onScanPress, 
@@ -66,6 +67,28 @@ const TopNavBar = ({
 export default function MedsScreen() {
   const segments = useSegments();
   const currentRoute = segments[segments.length - 1];
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Skeleton loading timeout: 4 seconds fixed duration
+  const SKELETON_DURATION = 4000; // 4 seconds
+  const MAX_SKELETON_TIME = 240000; // 4 minutes max timeout
+
+  const handleIntroComplete = () => {
+    // Hide skeleton after fixed 4 seconds duration
+    const skeletonTimeout = setTimeout(() => {
+      setIsDataLoaded(true);
+    }, SKELETON_DURATION);
+
+    // Safety: force show content after 4 minutes max
+    const maxTimeoutTimer = setTimeout(() => {
+      setIsDataLoaded(true);
+    }, MAX_SKELETON_TIME);
+
+    return () => {
+      clearTimeout(skeletonTimeout);
+      clearTimeout(maxTimeoutTimer);
+    };
+  };
   
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -82,11 +105,16 @@ export default function MedsScreen() {
         loaderText="Loading medication details..."
         loaderDuration={3000}
         backgroundColor="#F9FAFB"
+        onIntroComplete={handleIntroComplete}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <Text style={styles.title}>Medications Screen</Text>
-          <Text style={styles.subtitle}>Your medications will appear here</Text>
-        </ScrollView>
+        {!isDataLoaded ? (
+          <SkeletonMedsScreen />
+        ) : (
+          <ScrollView contentContainerStyle={styles.scrollContent}>
+            <Text style={styles.title}>Medications Screen</Text>
+            <Text style={styles.subtitle}>Your medications will appear here</Text>
+          </ScrollView>
+        )}
       </ScreenIntroGate>
     </SafeAreaView>
   );

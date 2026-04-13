@@ -1,10 +1,11 @@
 // app/(tabs)/checkin/index.tsx
 import { ScreenIntroGate } from '@/components/ui/ScreenIntroGate';
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, StatusBar, Platform, TouchableOpacity } from 'react-native';
+import { SkeletonCheckInScreen } from '@/components/ui/SkeletonLoader';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSegments } from 'expo-router';
+import React, { useState } from 'react';
+import { Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const TopNavBar = ({ 
   onScanPress, 
@@ -76,6 +77,28 @@ const TopNavBar = ({
 export default function CheckinScreen() {
   const segments = useSegments();
   const currentRoute = segments[segments.length - 1];
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Skeleton loading timeout: 4 seconds fixed duration
+  const SKELETON_DURATION = 4000; // 4 seconds
+  const MAX_SKELETON_TIME = 240000; // 4 minutes max timeout
+
+  const handleIntroComplete = () => {
+    // Hide skeleton after fixed 4 seconds duration
+    const skeletonTimeout = setTimeout(() => {
+      setIsDataLoaded(true);
+    }, SKELETON_DURATION);
+
+    // Safety: force show content after 4 minutes max
+    const maxTimeoutTimer = setTimeout(() => {
+      setIsDataLoaded(true);
+    }, MAX_SKELETON_TIME);
+
+    return () => {
+      clearTimeout(skeletonTimeout);
+      clearTimeout(maxTimeoutTimer);
+    };
+  };
   
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -92,11 +115,16 @@ export default function CheckinScreen() {
         loaderText="Preparing your check-in experience..."
         loaderDuration={3000}
         backgroundColor="#F9FAFB"
+        onIntroComplete={handleIntroComplete}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <Text style={styles.title}>Check-in Screen</Text>
-          <Text style={styles.subtitle}>Your health check-in will appear here</Text>
-        </ScrollView>
+        {!isDataLoaded ? (
+          <SkeletonCheckInScreen />
+        ) : (
+          <ScrollView contentContainerStyle={styles.scrollContent}>
+            <Text style={styles.title}>Check-in Screen</Text>
+            <Text style={styles.subtitle}>Your health check-in will appear here</Text>
+          </ScrollView>
+        )}
       </ScreenIntroGate>
     </SafeAreaView>
   );

@@ -1,8 +1,8 @@
 // app/(tabs)/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { router, useSegments, Slot } from 'expo-router';
-import { Dimensions, StyleSheet, TouchableOpacity, View, Text, Animated } from 'react-native';
-import { useRef, useEffect } from 'react';
+import { router, Slot, useSegments } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, TouchableOpacity, View, Easing } from 'react-native';
 
 const FAB_SIZE = 62;
 const TAB_CONFIG = [

@@ -49,8 +49,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ab007b7b-b7e8-4d9d-b9fc-748ce4cef5f3"
+        "projectId": "40be45c9-610f-46fb-9671-1ba863d9dfe2"
       }
-    }
+    },
+    "owner": "indresh404"
   }
 }

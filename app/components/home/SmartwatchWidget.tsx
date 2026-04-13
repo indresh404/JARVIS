@@ -202,22 +202,21 @@ export const SmartwatchWidget: React.FC = () => {
 
   useEffect(() => {
     startHeartbeatAnimation();
+    // Always start auto mode immediately — smooth live updates
+    updateDataAutomatically();
+    autoIntervalRef.current = setInterval(() => {
+      updateDataAutomatically();
+    }, 2500);
+
+    // Also try Python connection in background
     fetchHealthData();
-    
-    // Poll for Python connection every 5 seconds
     intervalRef.current = setInterval(() => {
-      if (!isConnected) {
-        fetchHealthData();
-      }
-    }, 5000);
-    
+      if (!isConnected) fetchHealthData();
+    }, 10000);
+
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      if (autoIntervalRef.current) {
-        clearInterval(autoIntervalRef.current);
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (autoIntervalRef.current) clearInterval(autoIntervalRef.current);
     };
   }, []);
 

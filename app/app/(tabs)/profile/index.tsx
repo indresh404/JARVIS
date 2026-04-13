@@ -124,7 +124,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [familyData, setFamilyData] = useState<any>(null);
   const [loadingFamily, setLoadingFamily] = useState(false);
-
+  const [healthId, setHealthId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.id || patientId) {
@@ -161,6 +161,11 @@ export default function ProfileScreen() {
 
       if (error) throw error;
       setProfile(data);
+      
+      // Set health ID from user data or generate from patient ID
+      const userId = data.health_id || data.id || resolvedId;
+      setHealthId(userId);
+      
     } catch (error) {
       console.error("Profile load error:", error);
       setProfile((prev: any) => prev || {
@@ -176,6 +181,8 @@ export default function ProfileScreen() {
         state: 'Demo State',
         adherence_rate: 100,
       });
+      // Fallback health ID
+      setHealthId(patientId || 'DEMO_USER_ID');
     } finally {
       setLoading(false);
     }
@@ -206,7 +213,7 @@ export default function ProfileScreen() {
   const handleShareQR = async () => {
     try {
       await Share.share({
-        message: `Check out my Health ID: ${patientId}`,
+        message: `Check out my Health ID: ${healthId || patientId}`,
         title: 'Share Health ID',
       });
     } catch {
@@ -280,6 +287,17 @@ export default function ProfileScreen() {
     }
   };
 
+  // Generate QR code value with actual user ID
+  const getQRValue = () => {
+    if (healthId) {
+      return `SWASTHYA_HEALTH_ID:${healthId}`;
+    }
+    if (patientId) {
+      return `SWASTHYA_PATIENT:${patientId}`;
+    }
+    return `SWASTHYA_USER:${user?.id || 'GUEST'}`;
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
@@ -333,9 +351,17 @@ export default function ProfileScreen() {
                     style={{ width: 120, height: 120 }} 
                 />
               ) : (
-                <Ionicons name="qr-code" size={120} color="#000000" />
+                <QRCode 
+                  value={getQRValue()}
+                  size={120}
+                  color="#000000"
+                  backgroundColor="#FFFFFF"
+                />
               )}
             </View>
+            <Text style={styles.qrSubtitle}>
+              Health ID: {healthId || patientId || user?.id || 'Not assigned'}
+            </Text>
             <Text style={styles.qrSubtitle}>Scan to access your health summary</Text>
             <View style={styles.qrButtons}>
               <TouchableOpacity style={styles.qrButton} onPress={handleShareQR}>
@@ -777,11 +803,12 @@ const styles = StyleSheet.create({
   qrSubtitle: {
     fontSize: 12,
     color: COLORS.text.secondary,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   qrButtons: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 8,
   },
   qrButton: {
     flexDirection: 'row',

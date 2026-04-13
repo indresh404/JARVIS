@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/store/auth.store';
 import { supabase } from '@/services/supabaseClient';
+import { BACKEND_URL, API_ENDPOINTS } from '@/config/api';
 
 interface Message {
   id: string;
@@ -68,10 +69,36 @@ export default function ChatScreen() {
     }, 100);
   }, [messages]);
 
-  const handleSendMessage = () => {
+  // Handle session end on unmount
+  useEffect(() => {
+    return () => {
+      if (user?.id) {
+        const sessionId = 'session-' + user.id;
+        fetch(`${BACKEND_URL}${API_ENDPOINTS.CHAT.END_SESSION}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ patient_id: user.id, session_id: sessionId })
+        }).catch(e => console.error("End session error:", e));
+      }
+    };
+  }, [user]);
+
+  const getFallbackReply = (input: string): string => {
+    const msg = input.toLowerCase();
+    if (msg.includes('blood pressure') || msg.includes('bp')) return 'Your recent BP readings have been tracking around 118/76 — within normal range. Continue your Amlodipine as prescribed and monitor weekly.';
+    if (msg.includes('headache') || msg.includes('head')) return 'Headaches can be linked to blood pressure fluctuations or dehydration. I\'ve noted this symptom. How long has this been going on?';
+    if (msg.includes('tired') || msg.includes('fatigue') || msg.includes('energy')) return 'Fatigue is a common concern with your conditions. Are you sleeping 7-8 hours? Let\'s also check if you\'ve missed any doses recently.';
+    if (msg.includes('medic') || msg.includes('tablet') || msg.includes('pill')) return 'You have 3 active medications: Metformin 500mg (morning), Amlodipine 5mg (evening), Vitamin D3 (afternoon). Have you been taking them consistently?';
+    if (msg.includes('hello') || msg.includes('hi') || msg.includes('hey')) return 'Hello! How are you feeling today? I\'m your AI health assistant — tell me about any symptoms, medications, or health concerns.';
+    if (msg.includes('pain') || msg.includes('hurt') || msg.includes('ache')) return 'I understand you\'re experiencing pain. Can you tell me where exactly and rate it from 1-10? This helps me assess the severity.';
+    if (msg.includes('sugar') || msg.includes('glucose') || msg.includes('diabet')) return 'Blood sugar management is key with your profile. Have you checked your levels today? Aim for fasting glucose below 126 mg/dL.';
+    if (msg.includes('sleep') || msg.includes('insomnia')) return 'Sleep quality directly impacts your heart health and blood pressure. 7-8 hours is recommended. Any difficulty falling asleep or staying asleep?';
+    return 'Thank you for sharing that. I\'m tracking this information to build your health profile. Can you tell me more, or is there a specific symptom you\'d like to discuss?';
+  };
+
+  const handleSendMessage = async (): Promise<void> => {
     if (!inputText.trim()) return;
 
-    // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
       text: inputText,
@@ -79,43 +106,45 @@ export default function ChatScreen() {
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = inputText;
     setInputText('');
     setIsLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        text: getAIResponse(inputText),
-        isUser: false,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, aiResponse]);
-      setIsLoading(false);
-    }, 1000);
+    const sessionId = 'session-' + (user?.id || 'demo');
+    fetch(`${BACKEND_URL}${API_ENDPOINTS.CHAT.MESSAGE}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        patient_id: user?.id || 'demo-patient',
+        session_id: sessionId,
+        message: currentInput,
+      }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        const aiResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          text: data.bot_reply || getFallbackReply(currentInput),
+          isUser: false,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, aiResponse]);
+      })
+      .catch(() => {
+        const errorMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          text: getFallbackReply(currentInput),
+          isUser: false,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, errorMsg]);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   };
 
-  const getAIResponse = (userInput: string) => {
-    const input = userInput.toLowerCase();
-    
-    if (input.includes('blood pressure') || input.includes('bp')) {
-      return 'Based on your recent readings, your blood pressure is stable at 120/80. Remember to take your medication regularly and reduce salt intake.';
-    } else if (input.includes('medication') || input.includes('medicine')) {
-      return 'You have 3 active medications:\n• Lisinopril (10mg) - Daily at 8 AM\n• Atorvastatin (20mg) - Daily at 8 PM\n• Aspirin (81mg) - Daily at 8 AM';
-    } else if (input.includes('appointment') || input.includes('doctor')) {
-      return 'Your next appointment with Dr. Sharma is scheduled for April 15, 2026 at 10:00 AM. Would you like me to set a reminder?';
-    } else if (input.includes('diet') || input.includes('food')) {
-      return 'For better heart health, consider:\n• Reducing sodium intake\n• Eating more fruits and vegetables\n• Choosing whole grains\n• Limiting saturated fats';
-    } else if (input.includes('exercise') || input.includes('workout')) {
-      return 'Aim for 30 minutes of moderate exercise, 5 days a week. Walking, swimming, or cycling are great options. Start slow and gradually increase intensity.';
-    } else if (input.includes('hello') || input.includes('hi')) {
-      return 'Hello! How are you feeling today? I\'m here to help with any health questions you have.';
-    } else if (input.includes('thank')) {
-      return 'You\'re welcome! I\'m always here to help with your health concerns. Is there anything else I can assist you with?';
-    } else {
-      return 'I understand you\'re asking about health. Could you please provide more details? I can help with:\n• Blood pressure monitoring\n• Medication reminders\n• Appointment scheduling\n• Diet and nutrition advice\n• Exercise recommendations';
-    }
-  };
+
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -147,7 +176,7 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -157,7 +186,13 @@ export default function ChatScreen() {
           <Ionicons name="chatbubble-ellipses" size={22} color="#0474FC" />
         </View>
         <Text style={styles.headerTitle}>AI Health Assistant</Text>
-        <View style={styles.headerRight} />
+        <TouchableOpacity
+          onPress={() => router.push('/(onboarding)/agent-log')}
+          style={styles.doneButton}
+        >
+          <Text style={styles.doneButtonText}>Done</Text>
+          <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+        </TouchableOpacity>
       </View>
 
       {/* Messages */}
@@ -243,6 +278,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
+  },
+  doneButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0474FC',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    gap: 5,
+  },
+  doneButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   headerRight: {
     width: 40,

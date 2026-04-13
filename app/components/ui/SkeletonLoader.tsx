@@ -10,17 +10,18 @@ export const ShimmerPlaceholder = ({ width = '100%', height = 100, borderRadius 
       Animated.sequence([
         Animated.timing(animatedValue, {
           toValue: 1,
-          duration: 300,
+          duration: 1500,
           useNativeDriver: false,
         }),
         Animated.timing(animatedValue, {
           toValue: 0,
-          duration: 100,
+          duration: 1500,
           useNativeDriver: false,
         }),
       ])
     );
     animation.start();
+    
     
     return () => {
       animation.reset();

@@ -68,7 +68,7 @@ export default function OTPVerifyScreen() {
     Keyboard.dismiss();
     const otpCode = code.join('');
 
-    if (otpCode.length !== 6) {
+    if (otpCode.length !== 5) {
       Alert.alert('Error', 'Please enter the complete 6-digit OTP');
       return;
     }

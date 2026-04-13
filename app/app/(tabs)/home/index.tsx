@@ -9,11 +9,12 @@ import {
   TouchableOpacity, 
   SafeAreaView, 
   StatusBar,
-  Platform 
+  Platform,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSegments } from 'expo-router';
+import { useSegments, router } from 'expo-router';
 
 // Top Navigation Bar Component (inline)
 const TopNavBar = ({ 
@@ -89,6 +90,36 @@ const TopNavBar = ({
   );
 };
 
+// AI Chat Button Component
+const AIChatButton = () => {
+  const handlePress = () => {
+    try {
+      // Navigate to AI Chat screen
+      router.push('/(onboarding)/chat');
+    } catch (error) {
+      Alert.alert('Error', 'Unable to open chat. Please try again.');
+      console.error('Navigation error:', error);
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={handlePress}
+      style={styles.aiChatButton}
+    >
+      <LinearGradient
+        colors={['#0474FC', '#0360D0']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.aiChatGradient}
+      >
+        <Ionicons name="chatbubble-ellipses" size={28} color="#FFFFFF" />
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+};
+
 export default function HomeScreen() {
   const segments = useSegments();
   const currentRoute = segments[segments.length - 1];
@@ -142,6 +173,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    alignItems: 'center',
   },
   welcomeText: {
     fontSize: 18,
@@ -149,6 +181,29 @@ const styles = StyleSheet.create({
     color: '#111827',
     textAlign: 'center',
     marginTop: 20,
+    marginBottom: 30,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 15,
+  },
+  // AI Chat Button Styles
+  aiChatButton: {
+    marginVertical: 20,
+    shadowColor: '#0474FC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  aiChatGradient: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Top Navigation Bar Styles
   topNavContainer: {

@@ -138,60 +138,51 @@ export default function LoginScreen() {
     }).start();
   }, [isFocused]);
 
-  const animatePop = (animValue: Animated.Value, onComplete?: () => void) => {
-    Animated.sequence([
-      Animated.spring(animValue, {
-        toValue: 0.92,
-        tension: 100,
-        friction: 3,
-        useNativeDriver: true,
-      }),
-      Animated.spring(animValue, {
-        toValue: 1.02,
-        tension: 100,
-        friction: 3,
-        useNativeDriver: true,
-      }),
+  // INSTANT POP EFFECT - NO DELAY
+  const animatePop = (animValue: Animated.Value) => {
+    Animated.spring(animValue, {
+      toValue: 0.92,
+      tension: 300,
+      friction: 2,
+      useNativeDriver: true,
+    }).start(() => {
       Animated.spring(animValue, {
         toValue: 1,
-        tension: 100,
+        tension: 200,
         friction: 3,
         useNativeDriver: true,
-      }),
-    ]).start(() => {
-      if (onComplete) onComplete();
+      }).start();
     });
   };
 
   const handleContinue = async () => {
+    // TRIGGER POP EFFECT IMMEDIATELY - FIRST THING
+    animatePop(buttonPopAnim);
+
     if (phoneNumber.length < 10) {
       Alert.alert('Error', 'Please enter a valid phone number');
       return;
     }
 
-    animatePop(buttonPopAnim, async () => {
-      setLoading(true);
+    setLoading(true);
 
-      setTimeout(() => {
-        setLoading(false);
-        router.push({
-          pathname: '/(auth)/otp',
-          params: { phone: phoneNumber },
-        });
-      }, 1500);
-    });
+    setTimeout(() => {
+      setLoading(false);
+      router.push({
+        pathname: '/(auth)/otp',
+        params: { phone: phoneNumber },
+      });
+    }, 1500);
   };
 
   const handleGoogleSignIn = () => {
-    animatePop(googleButtonPopAnim, () => {
-      Alert.alert('Google Sign In', 'Google authentication would be integrated here');
-    });
+    animatePop(googleButtonPopAnim);
+    Alert.alert('Google Sign In', 'Google authentication would be integrated here');
   };
 
   const handleBack = () => {
-    animatePop(backButtonPopAnim, () => {
-      router.back();
-    });
+    animatePop(backButtonPopAnim);
+    router.back();
   };
 
   const inputBorderColor = inputBorderAnim.interpolate({
@@ -351,7 +342,7 @@ export default function LoginScreen() {
               </Animated.View>
             </View>
 
-            {/* Continue Button with Gradient */}
+            {/* Continue Button with Gradient - INSTANT POP */}
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={handleContinue}

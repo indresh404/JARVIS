@@ -14,6 +14,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: backend   # ✅ no need for "cd backend" everywhere
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,40 +26,38 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'   # ✅ built-in cache (better than manual)
 
-      # ✅ Cache dependencies (faster builds)
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      # ✅ Install dependencies (Linux-safe)
+      # ✅ Install dependencies
       - name: Install dependencies
         run: |
-          cd backend
           python -m pip install --upgrade pip
           pip install --no-cache-dir -r requirements.txt
 
-      # ✅ Optional: Lint check (good for interview)
+      # ✅ Safety check (prevents pywinpty-type issues ever again)
+      - name: Check unwanted packages
+        run: |
+          pip list | grep pywinpty && exit 1 || echo "No pywinpty ✅"
+
+      # ✅ Lint (cleaner output)
       - name: Lint check
         run: |
-          cd backend
           pip install flake8
-          flake8 . || true
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
 
-      # ✅ Basic syntax check
-      - name: Run basic check
+      # ✅ Import check (better than only py_compile)
+      - name: Import check
         run: |
-          cd backend
+          python -c "import main"
+
+      # ✅ Syntax check
+      - name: Compile check
+        run: |
           python -m py_compile main.py
 
-      # ✅ Optional: Run tests if present
+      # ✅ Run tests (if exist)
       - name: Run tests
         run: |
-          cd backend
           if [ -f "test_hf_load.py" ]; then
             python test_hf_load.py
           else

@@ -20,6 +20,16 @@
 
 ---
 
+## 🎥 Project Videos
+
+📱 **App Demo (Feature Walkthrough)**  
+👉 [Watch Here](https://drive.google.com/file/d/1M5wEQYWNxE37Nr2mSLzRnJUkeQMUEPDt/view?usp=drive_link)
+
+🎬 **Idea Explanation (Pitch Video)**  
+👉 [Watch Here](https://drive.google.com/file/d/1BTgP3KzCQsQe5yFBoiZnIom8R9b5Dpwi/view?usp=drive_link)
+
+
+
 ## Table of Contents
 
 1. [What is Swasthya AI?](#1-what-is-swasthya-ai)

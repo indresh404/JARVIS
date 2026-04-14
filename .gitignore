@@ -1,0 +1,26 @@
+# 🔥 Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 🔥 Env
+.env
+.env.*
+
+# 🔥 ML / AI (VERY IMPORTANT)
+backend/rag/model_cache/
+backend/rag/index/
+backend/ml/saved_models/
+
+# 🔥 Expo / React Native
+app/.expo/
+
+# 🔥 Node
+node_modules/
+
+# 🔥 Logs
+*.log
+
+# 🔥 OS
+.DS_Store
+Thumbs.db

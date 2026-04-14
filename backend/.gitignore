@@ -1,8 +1,9 @@
-/venv
-.env
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-*.log
-*.env
+.env
+.env.*
+backend/rag/model_cache/
+backend/rag/index/
+backend/ml/saved_models/
+app/.expo/
+node_modules/

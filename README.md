@@ -20,10 +20,13 @@
 
 ---
 
-## 🚀 Live Prototype
+## 🎥 Project Videos
 
-🔗 [Try Swasthya AI](https://swasthya-ai-rouge.vercel.app)
+🎬 **Idea Explanation (Pitch Video)**  
+👉 [Watch Here](IDEA_VIDEO_LINK)
 
+📱 **App Demo (Feature Walkthrough)**  
+👉 [Watch Here](https://drive.google.com/file/d/1M5wEQYWNxE37Nr2mSLzRnJUkeQMUEPDt/view?usp=drive_link)
 
 ## Table of Contents
 

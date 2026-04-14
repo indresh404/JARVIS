@@ -52,12 +52,12 @@ async def chat_message(data: ChatMessageInput):
             extraction = SymptomExtraction(**extraction_data)
         except Exception as e:
             print(f"⚠️ Symptom extraction skipped/failed: {e}")
-            extraction = None
+            extraction = SymptomExtraction(has_symptom=False)
 
     except Exception as e:
         print(f"❌ AI Core Error: {e}")
         bot_reply = "I understand you're sharing health information. Could you tell me more about your symptoms?"
-        extraction = None
+        extraction = SymptomExtraction(has_symptom=False)
 
     # Persistence attempt (Bot Reply)
     try:
@@ -73,7 +73,7 @@ async def chat_message(data: ChatMessageInput):
         # RULE 7 — SYMPTOM CONFIDENCE THRESHOLD
         if extraction.confidence < 70:
             clarification_needed = True
-        elif extraction.severity >= 7:
+        elif extraction.severity is not None and extraction.severity >= 7:
             confirmation_required = True
         elif extraction.confidence >= 70:
             save_ready = True

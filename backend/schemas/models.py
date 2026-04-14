@@ -28,7 +28,7 @@ class ChatMessageInput(BaseModel):
     patient_context: PatientContext
 
 class SymptomExtraction(BaseModel):
-    has_symptom: bool
+    has_symptom: bool = False
     symptom: Optional[str] = None
     body_zone: Optional[Literal["head", "chest", "stomach", "back", "legs", "lungs", "systemic"]] = None
     severity: Optional[int] = None
@@ -62,10 +62,10 @@ class SessionSummary(BaseModel):
 
 class CheckinQuestionsInput(BaseModel):
     patient_id: str
-    conditions: List[str]
-    last_symptoms: List[str]
-    wearable_flags: List[str]
-    pending_doctor_questions: List[Dict[str, Any]]
+    conditions: List[str] = []
+    last_symptoms: List[str] = []
+    wearable_flags: List[str] = []
+    pending_doctor_questions: List[Dict[str, Any]] = []
 
 class CheckinQuestion(BaseModel):
     text: str

@@ -38,6 +38,16 @@ export const logMedAdherence = async (patientId: string, medicine: string) => {
     return data ?? { status: 'demo', logged: true };
 };
 
+export const addMedicine = async (patientId: string, medicineData: any) => {
+    const data = await safeFetchJson(`${BACKEND_URL}${API_ENDPOINTS.MEDS.ADD(patientId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient_id: patientId, ...medicineData }),
+    });
+    return data ?? { status: 'demo', added: true };
+};
+
+
 export const getPendingCheckins = async (id: string) => {
     const data = await safeFetchJson(`${BACKEND_URL}${API_ENDPOINTS.CHECKINS.PENDING(id)}`);
     return data?.status === 'success' ? data.questions : [];

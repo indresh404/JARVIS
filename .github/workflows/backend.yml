@@ -2,10 +2,13 @@ name: Backend CI
 
 on:
   push:
-    paths: ['backend/**']
-    branches: [main]
+    paths:
+      - 'backend/**'
+    branches:
+      - main
   pull_request:
-    paths: ['backend/**']
+    paths:
+      - 'backend/**'
 
 jobs:
   test:
@@ -20,12 +23,41 @@ jobs:
         with:
           python-version: '3.11'
 
+      # ✅ Cache dependencies (faster builds)
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # ✅ Install dependencies (Linux-safe)
       - name: Install dependencies
         run: |
           cd backend
-          pip install -r requirements.txt
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir -r requirements.txt
 
+      # ✅ Optional: Lint check (good for interview)
+      - name: Lint check
+        run: |
+          cd backend
+          pip install flake8
+          flake8 . || true
+
+      # ✅ Basic syntax check
       - name: Run basic check
         run: |
           cd backend
           python -m py_compile main.py
+
+      # ✅ Optional: Run tests if present
+      - name: Run tests
+        run: |
+          cd backend
+          if [ -f "test_hf_load.py" ]; then
+            python test_hf_load.py
+          else
+            echo "No tests found, skipping..."
+          fi

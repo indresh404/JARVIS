@@ -32,6 +32,7 @@ export const API_ENDPOINTS = {
     MEDS: {
         LIST: (id: string) => `/meds/${id}`,
         LOG: '/meds/log',
+        ADD: (id: string) => `/meds/add`,
     },
     PROFILE: {
         GET: (id: string) => `/profile/${id}`,

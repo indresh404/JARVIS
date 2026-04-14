@@ -16,6 +16,11 @@ const safeFetchJson = async (url: string, init?: RequestInit) => {
 };
 
 export const backendService = {
+    // Jan Aushadhi Stores
+    getNearestStores: async (lat: number, lon: number) => {
+        return await safeFetchJson(`${BACKEND_URL}/schemes/nearby?lat=${lat}&lon=${lon}`);
+    },
+
     // Chat End Session
     endSession: async (patientId: string, log: any[], existingSummary: string) => {
         return await safeFetchJson(`${BACKEND_URL}${API_ENDPOINTS.CHAT.END_SESSION}`, {

@@ -77,5 +77,37 @@ export const backendService = {
                 patient_context: context
             })
         });
+    },
+
+    // Medical Report Extraction
+    extractReport: async (fileUri: string, fileName: string, fileType: string) => {
+        const formData = new FormData();
+        // @ts-ignore
+        formData.append('file', {
+            uri: fileUri,
+            name: fileName,
+            type: fileType,
+        });
+
+        try {
+            const response = await fetch(`${BACKEND_URL}${API_ENDPOINTS.EXTRACT.REPORT}`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                console.error('Extraction API Error:', error);
+                return null;
+            }
+            return await response.json();
+        } catch (e) {
+            console.error('Extraction Fetch Error:', e);
+            return null;
+        }
     }
 };

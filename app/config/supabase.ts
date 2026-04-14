@@ -14,21 +14,28 @@ export const SUPABASE_ANON_KEY = supabaseAnonKey;
 // Universal storage that works on all platforms
 const universalStorage = {
   getItem: (key: string) => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      return Promise.resolve(localStorage.getItem(key));
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return Promise.resolve(window.localStorage.getItem(key));
+      }
+      return Promise.resolve(null);
     }
     return AsyncStorage.getItem(key);
   },
   setItem: (key: string, value: string) => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      localStorage.setItem(key, value);
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, value);
+      }
       return Promise.resolve();
     }
     return AsyncStorage.setItem(key, value);
   },
   removeItem: (key: string) => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      localStorage.removeItem(key);
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key);
+      }
       return Promise.resolve();
     }
     return AsyncStorage.removeItem(key);

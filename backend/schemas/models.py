@@ -223,3 +223,19 @@ class SchemesResponse(BaseModel):
     matched_schemes: List[Scheme]
     nearby_hospitals: List[Hospital]
     generic_alternatives: List[GenericMedicine] = []
+
+class ExtractedMedication(BaseModel):
+    name: str
+    dosage: str
+    frequency: str
+    purpose: str
+
+class ExtractedCondition(BaseModel):
+    condition: str
+    status: str
+    notes: Optional[str] = None
+
+class ExtractionResponse(BaseModel):
+    success: bool
+    data: Optional[dict] = None  # Contains medications, conditions, summary
+    error: Optional[str] = None

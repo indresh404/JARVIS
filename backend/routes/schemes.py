@@ -45,14 +45,19 @@ HOSPITALS_DB = {
 
 # Mock Database for Jan Aushadhi Generic Medicines
 GENERIC_DB = [
-    {"brand": "Glycomet 500mg", "generic": "Metformin 500mg", "price": 45.0, "jan_price": 9.5},
-    {"brand": "Amlong 5mg", "generic": "Amlodipine 5mg", "price": 68.0, "jan_price": 12.0},
-    {"brand": "Telma 40", "generic": "Telmisartan 40mg", "price": 105.0, "jan_price": 22.0},
-    {"brand": "Ecosprin 75", "generic": "Aspirin 75mg", "price": 25.0, "jan_price": 5.0},
-    {"brand": "Caldikind", "generic": "Calcium + Vitamin D3", "price": 180.0, "jan_price": 45.0},
-    {"brand": "Augmentin 625", "generic": "Amoxicillin + Clavulanic Acid 625mg", "price": 210.0, "jan_price": 55.0},
-    {"brand": "Pantocid 40", "generic": "Pantoprazole 40mg", "price": 140.0, "jan_price": 32.0},
-    {"brand": "Zyrtec", "generic": "Cetirizine 10mg", "price": 40.0, "jan_price": 8.0},
+    {"brand": "Glycomet 500mg", "generic": "Metformin 500mg", "price": 45.0, "jan_price": 9.5, "conditions": ["Diabetes"]},
+    {"brand": "Amlong 5mg", "generic": "Amlodipine 5mg", "price": 68.0, "jan_price": 12.0, "conditions": ["Hypertension", "BP"]},
+    {"brand": "Telma 40", "generic": "Telmisartan 40mg", "price": 105.0, "jan_price": 22.0, "conditions": ["Hypertension", "BP"]},
+    {"brand": "Ecosprin 75", "generic": "Aspirin 75mg", "price": 25.0, "jan_price": 5.0, "conditions": ["BP", "Heart"]},
+    {"brand": "Caldikind", "generic": "Calcium + Vitamin D3", "price": 180.0, "jan_price": 45.0, "conditions": ["Deficiency"]},
+    {"brand": "Augmentin 625", "generic": "Amoxicillin + Clavulanic Acid 625mg", "price": 210.0, "jan_price": 55.0, "conditions": ["Infection"]},
+    {"brand": "Pantocid 40", "generic": "Pantoprazole 40mg", "price": 140.0, "jan_price": 32.0, "conditions": ["Acidity"]},
+    {"brand": "Zyrtec", "generic": "Cetirizine 10mg", "price": 40.0, "jan_price": 8.0, "conditions": ["Allergy"]},
+    {"brand": "Voveran", "generic": "Diclofenac 50mg", "price": 55.0, "jan_price": 12.0, "conditions": ["Pain"]},
+    {"brand": "Dolo 650", "generic": "Paracetamol 650mg", "price": 32.0, "jan_price": 7.0, "conditions": ["Fever", "Pain"]},
+    {"brand": "Combiflam", "generic": "Ibuprofen + Paracetamol", "price": 48.0, "jan_price": 11.0, "conditions": ["Pain"]},
+    {"brand": "Atorva 10", "generic": "Atorvastatin 10mg", "price": 120.0, "jan_price": 28.0, "conditions": ["Cholesterol"]},
+    {"brand": "Budecort", "generic": "Budesonide Inhaler", "price": 450.0, "jan_price": 110.0, "conditions": ["Asthma"]},
 ]
 
 @router.post("/match", response_model=SchemesResponse)
@@ -62,7 +67,7 @@ async def match_schemes(data: SchemeMatchInput):
     """
     matched = []
     
-    # Simple rule-based matching
+    # Simple rule-based matching for Government Schemes
     for scheme in SCHEMES_DB:
         # Match by conditions
         if any(cond in scheme.conditions_covered for cond in data.confirmed_conditions):
@@ -80,17 +85,24 @@ async def match_schemes(data: SchemeMatchInput):
     # Filter hospitals by state
     hospitals = HOSPITALS_DB.get(data.state, [])[:3]
 
-    # Find generic alternatives for confirmed conditions (simulated)
+    # Find generic alternatives for confirmed conditions & demographics
     generic_alts = []
-    # If the patient has conditions like hypertension or diabetes, show relevant generic medicines
-    relevant_generics = []
-    if any(c in ["Hypertension", "BP", "High BP"] for c in data.confirmed_conditions):
-        relevant_generics.extend(["Amlodipine 5mg", "Telmisartan 40mg", "Aspirin 75mg"])
-    if any(c in ["Diabetes", "Sugar"] for c in data.confirmed_conditions):
-        relevant_generics.extend(["Metformin 500mg"])
     
+    # If the patient has specific conditions, find matching generic medicines
     for gen in GENERIC_DB:
-        if gen["generic"] in relevant_generics:
+        is_relevant = False
+        # Check if any of the medication's treated conditions are in the patient's conditions
+        if any(cond.lower() in [pc.lower() for pc in data.confirmed_conditions] for cond in gen["conditions"]):
+            is_relevant = True
+        
+        # Also check for common synonyms or categories
+        if not is_relevant:
+            if "Hypertension" in data.confirmed_conditions and any(c in ["BP", "Hypertension"] for c in gen["conditions"]):
+                is_relevant = True
+            if "Diabetes" in data.confirmed_conditions and "Diabetes" in gen["conditions"]:
+                is_relevant = True
+
+        if is_relevant:
             savings = ((gen["price"] - gen["jan_price"]) / gen["price"]) * 100
             generic_alts.append(GenericMedicine(
                 brand_name=gen["brand"],
@@ -99,6 +111,9 @@ async def match_schemes(data: SchemeMatchInput):
                 jan_aushadhi_price=gen["jan_price"],
                 savings_percentage=round(savings, 2)
             ))
+
+    # Sort generic alternatives by savings
+    generic_alts.sort(key=lambda x: x.savings_percentage, reverse=True)
 
     return SchemesResponse(
         matched_schemes=matched,

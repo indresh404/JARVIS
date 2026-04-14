@@ -21,18 +21,22 @@ async def chat_message(data: ChatMessageInput):
     context_str = f"Rolling Summary: {data.patient_context.rolling_summary}\nProfile: {data.patient_context.profile_summary}"
     
     # 3. Call Groq for reply and extraction in parallel
-    reply_task = call_groq(CHAT_SYSTEM_PROMPT, f"Context: {context_str}\nMessage: {data.message}")
-    extract_task = call_groq(SYMPTOM_EXTRACTION_PROMPT, f"Extract from: {data.message}")
-    
-    bot_reply, extraction_json = await asyncio.gather(reply_task, extract_task)
-    
+    try:
+        reply_task = call_groq(CHAT_SYSTEM_PROMPT, f"Context: {context_str}\nMessage: {data.message}")
+        extract_task = call_groq(SYMPTOM_EXTRACTION_PROMPT, f"Extract from: {message if 'message' in locals() else data.message}")
+        bot_reply, extraction_json = await asyncio.gather(reply_task, extract_task)
+        extraction_data = json.loads(extraction_json)
+        
+        if "error" in extraction_data:
+            raise ValueError(extraction_data["error"])
+        extraction = SymptomExtraction(**extraction_data)
+    except Exception as e:
+        print(f"Chat Message AI Fallback Triggered: {e}")
+        bot_reply = "I understand. Can you tell me more about how you're feeling?"
+        extraction = None
+
     # 4. Persist Bot Reply
     SupabaseService.save_message(data.patient_id, data.session_id, "assistant", bot_reply)
-
-    try:
-        extraction = SymptomExtraction(**json.loads(extraction_json))
-    except Exception:
-        extraction = None
 
     clarification_needed = False
     save_ready = False
@@ -65,24 +69,40 @@ async def end_session(data: SessionSummaryInput):
     Summarizes the session and updates rolling context.
     """
     log_str = "\n".join([f"{m['role']}: {m['content']}" for m in data.full_conversation_log])
-    summary_json = await call_groq(SESSION_SUMMARIZATION_PROMPT, f"History: {log_str}\nExisting Rolling: {data.existing_rolling_summary}")
-    
     try:
+        summary_json = await call_groq(SESSION_SUMMARIZATION_PROMPT, f"History: {log_str}\nExisting Rolling: {data.existing_rolling_summary}")
         summary_data = json.loads(summary_json)
+        
+        # Check if Groq returned an error JSON
+        if "error" in summary_data:
+            raise ValueError(summary_data["error"])
+            
         return SessionSummary(**summary_data)
     except Exception as e:
-        raise HTTPException(status_code=422, detail="Failed to parse session summary JSON from Groq")
+        print(f"Summarization Fallback Triggered: {e}")
+        # Return a sensible fallback summary so the UI doesn't crash
+        return SessionSummary(
+            daily_summary="Session completed. (AI Summary unavailable)",
+            rolling_summary=data.existing_rolling_summary or "Continuing health tracking.",
+            symptoms_today=[],
+            key_risks="unknown:low",
+            urgency="Routine"
+        )
 
 @router.post("/extract-symptom", response_model=SymptomExtraction)
 async def extract_symptom(message: str, patient_id: str):
     """
     Internal/Direct extraction route.
     """
-    extraction_json = await call_groq(SYMPTOM_EXTRACTION_PROMPT, f"Extract from: {message}")
     try:
-        return SymptomExtraction(**json.loads(extraction_json))
-    except Exception:
-        raise HTTPException(status_code=422, detail="Extraction failed")
+        extraction_json = await call_groq(SYMPTOM_EXTRACTION_PROMPT, f"Extract from: {message}")
+        extraction_data = json.loads(extraction_json)
+        if "error" in extraction_data:
+            raise ValueError(extraction_data["error"])
+        return SymptomExtraction(**extraction_data)
+    except Exception as e:
+        print(f"Extraction Fallback Triggered: {e}")
+        return SymptomExtraction(has_symptom=False, confidence=0, clarification_needed=False)
 
 @router.post("/checkin-questions", response_model=CheckinQuestionsResponse)
 async def checkin_questions(data: CheckinQuestionsInput):
@@ -90,12 +110,16 @@ async def checkin_questions(data: CheckinQuestionsInput):
     POST /chat/checkin-questions
     Generates tailored follow-up questions for the next session.
     """
-    questions_json = await call_groq(CHECKIN_QUESTIONS_PROMPT, f"Data: {data.model_dump_json()}")
     try:
+        questions_json = await call_groq(CHECKIN_QUESTIONS_PROMPT, f"Data: {data.model_dump_json()}")
         questions_dict = json.loads(questions_json)
+        if "error" in questions_dict:
+            raise ValueError(questions_dict["error"])
         return CheckinQuestionsResponse(**questions_dict)
-    except Exception:
+    except Exception as e:
+        print(f"CheckinQuestions Fallback Triggered: {e}")
         # Fallback questions
         return CheckinQuestionsResponse(questions=[
-            {"text": "How did you sleep last night?", "clinical_reason": "General recovery monitoring", "expected_data_type": "free_text", "pending_question_id": None}
+            {"text": "How did you sleep last night?", "clinical_reason": "General recovery monitoring", "expected_data_type": "free_text", "pending_question_id": None},
+            {"text": "How is your energy level today?", "clinical_reason": "General wellness check", "expected_data_type": "severity_score", "pending_question_id": None}
         ])

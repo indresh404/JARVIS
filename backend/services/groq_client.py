@@ -35,7 +35,11 @@ async def call_groq(system_prompt: str, user_prompt: str, max_tokens: int = 1024
             response.raise_for_status()
             data = response.json()
             return data["choices"][0]["message"]["content"]
+        except httpx.HTTPStatusError as e:
+            error_body = e.response.text
+            print(f"Groq API HTTP Error ({e.response.status_code}): {error_body}")
+            return json.dumps({"error": f"Groq API Error {e.response.status_code}", "detail": error_body})
         except Exception as e:
-            print(f"Groq API Error: {e}")
+            print(f"Groq Client Exception: {e}")
             # Return a minimal valid JSON error if possible
             return json.dumps({"error": "LLM unavailable", "exception": str(e)})

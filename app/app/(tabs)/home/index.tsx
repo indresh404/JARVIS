@@ -19,8 +19,12 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator,
+  Modal
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { backendService } from '@/services/backend.service';
 import { supabase } from '@/services/supabaseClient';
 import { useAuthStore } from '@/store/auth.store';
 
@@ -126,6 +130,68 @@ const AIChatButton = () => {
         </LinearGradient>
       </TouchableOpacity>
     </View>
+  );
+};
+
+// Extraction Results Modal Component
+const ExtractionResultsModal = ({ visible, data, onClose, loading }: any) => {
+  if (!data && !loading) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Extraction Results</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={24} color="#111827" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalBody}>
+            {loading ? (
+              <ActivityIndicator size="large" color="#0474FC" style={{ marginVertical: 40 }} />
+            ) : (
+              <>
+                <Text style={styles.resultSectionTitle}>Summary</Text>
+                <Text style={styles.resultText}>{data?.summary || 'No summary available.'}</Text>
+
+                {data?.medications?.length > 0 && (
+                  <>
+                    <Text style={styles.resultSectionTitle}>Medications</Text>
+                    {data.medications.map((med: any, i: number) => (
+                      <View key={i} style={styles.resultItem}>
+                        <Text style={styles.resultItemTitle}>{med.name}</Text>
+                        <Text style={styles.resultItemDesc}>{med.dosage} - {med.frequency}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                {data?.conditions?.length > 0 && (
+                  <>
+                    <Text style={styles.resultSectionTitle}>Detected Conditions</Text>
+                    {data.conditions.map((cond: any, i: number) => (
+                      <View key={i} style={styles.resultItem}>
+                        <Text style={styles.resultItemTitle}>{cond.condition}</Text>
+                        <Text style={styles.resultItemDesc}>Status: {cond.status}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+              </>
+            )}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={onClose}
+          >
+            <Text style={styles.closeButtonText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 };
 
@@ -433,6 +499,9 @@ export default function HomeScreen() {
   const [bodyMapVisible, setBodyMapVisible] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isAbnormal, setIsAbnormal] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractedData, setExtractedData] = useState<any>(null);
+  const [extractionModalVisible, setExtractionModalVisible] = useState(false);
 
   // Skeleton loading timeout: 2 seconds fixed duration
   const SKELETON_DURATION = 2000; // 2 seconds
@@ -500,6 +569,39 @@ export default function HomeScreen() {
     return 'User';
   };
 
+  const handleScanReport = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const file = result.assets[0];
+      setExtracting(true);
+      
+      const response = await backendService.extractReport(
+        file.uri,
+        file.name,
+        file.mimeType || 'application/pdf'
+      );
+
+      setExtracting(false);
+      
+      if (response && response.success) {
+        setExtractedData(response.data);
+        setExtractionModalVisible(true);
+      } else {
+        Alert.alert('Extraction Failed', 'Could not extract data from the report. Please try again with a clearer document.');
+      }
+    } catch (error) {
+      setExtracting(false);
+      console.error('Scan Error:', error);
+      Alert.alert('Error', 'An unexpected error occurred while scanning.');
+    }
+  };
+
   // Get first name for greeting
   const getFirstName = () => {
     const fullName = getUserName();
@@ -512,7 +614,7 @@ export default function HomeScreen() {
 
       {/* Top Navigation Bar with dynamic title */}
       <TopNavBar
-        onScanPress={() => console.log('Scan pressed')}
+        onScanPress={handleScanReport}
         onNotificationPress={() => console.log('Notification pressed')}
         onProfilePress={() => router.push('/(tabs)/profile')}
         notificationCount={3}
@@ -579,6 +681,22 @@ export default function HomeScreen() {
               visible={bodyMapVisible}
               onClose={() => setBodyMapVisible(false)}
             />
+
+            {/* Extraction Results Modal */}
+            <ExtractionResultsModal
+              visible={extractionModalVisible}
+              data={extractedData}
+              onClose={() => setExtractionModalVisible(false)}
+              loading={extracting}
+            />
+
+            {/* Loading Indicator for Extraction */}
+            {extracting && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color="#0474FC" />
+                <Text style={styles.loadingText}>Analyzing Report...</Text>
+              </View>
+            )}
 
             {/* AI Chat Button - Floating */}
             <AIChatButton />
@@ -1114,5 +1232,105 @@ const styles = StyleSheet.create({
   },
   followingBtnText: {
     color: '#6B7280',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0474FC',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 32,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  modalBody: {
+    marginBottom: 20,
+  },
+  resultSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 20,
+    marginBottom: 10,
+    letterSpacing: -0.3,
+  },
+  resultText: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 22,
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 12,
+  },
+  resultItem: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  resultItemTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  resultItemDesc: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  closeButton: {
+    backgroundColor: '#0474FC',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    shadowColor: '#0474FC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  closeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

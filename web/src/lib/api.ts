@@ -3,12 +3,27 @@ import { Patient, Alert, BriefingEntry, Symptom, DailySummary, QnAEntry, RiskLev
 import * as mock from './mockData';
 
 const isUsingPlaceholder = (supabase as any).supabaseUrl?.includes('placeholder');
+const BACKEND_URL = 'http://localhost:8000';
+
+const safeFetch = async (url: string, init?: RequestInit) => {
+  try {
+    const res = await fetch(url, init);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+};
 
 export const api = {
   async getPatients() {
     if (isUsingPlaceholder) return mock.MOCK_PATIENTS;
 
     try {
+      // Try to get from Backend first
+      const backRes = await safeFetch(`${BACKEND_URL}/profiles/all`);
+      if (backRes && backRes.status === 'success') return backRes.patients;
+
       const { data, error } = await supabase
         .from('users')
         .select(`
@@ -63,6 +78,10 @@ export const api = {
         daily_summaries: []
       };
     }
+
+    // Try backend detail
+    const backRes = await safeFetch(`${BACKEND_URL}/profiles/${patientId}`);
+    if (backRes && backRes.status === 'success') return backRes.profile;
 
     const { data, error } = await supabase
       .from('users')
@@ -315,5 +334,33 @@ export const api = {
     await supabase.from('daily_summaries').upsert(summaries);
 
     return { success: true };
+  },
+
+  async getGenericAlternatives(patientId: string, conditions: string[]) {
+    return await safeFetch(`${BACKEND_URL}/schemes/match`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        patient_id: patientId,
+        age: 45,
+        income_category: 'Low',
+        state: 'Maharashtra',
+        confirmed_conditions: conditions,
+        current_risk_level: 'Moderate'
+      })
+    });
+  },
+
+  async chatMessage(patientId: string, message: string, context: any) {
+    return await safeFetch(`${BACKEND_URL}/chat/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        patient_id: patientId,
+        session_id: 'web-session',
+        patient_context: context
+      })
+    });
   }
 };

@@ -12,22 +12,23 @@ import {
 } from 'react-native';
 
 interface ChatInputProps {
-  onSend: (message: string) => void;
+  value: string;
+  onChangeText: (text: string) => void;
+  onSend: () => void;
   disabled?: boolean;
   placeholder?: string;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
+  value,
+  onChangeText,
   onSend,
   disabled = false,
   placeholder = 'Type your answer...',
 }) => {
-  const [message, setMessage] = useState('');
-
   const handleSend = () => {
-    if (message.trim() && !disabled) {
-      onSend(message.trim());
-      setMessage('');
+    if (value.trim() && !disabled) {
+      onSend();
     }
   };
 
@@ -40,22 +41,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            value={message}
-            onChangeText={setMessage}
+            value={value}
+            onChangeText={onChangeText}
             placeholder={placeholder}
             placeholderTextColor={COLORS.gray[400]}
             multiline
             editable={!disabled}
           />
           <TouchableOpacity
-            style={[styles.sendButton, (!message.trim() || disabled) && styles.sendButtonDisabled]}
+            style={[styles.sendButton, (!value.trim() || disabled) && styles.sendButtonDisabled]}
             onPress={handleSend}
-            disabled={!message.trim() || disabled}
+            disabled={!value.trim() || disabled}
           >
             <Ionicons
               name="send"
               size={20}
-              color={message.trim() && !disabled ? COLORS.white : COLORS.gray[400]}
+              color={value.trim() && !disabled ? COLORS.white : COLORS.gray[400]}
             />
           </TouchableOpacity>
         </View>

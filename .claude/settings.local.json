@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ipconfig)",
+      "Bash(findstr /i \"ipv4\")",
+      "Bash(findstr /C:\"IPv4\")"
+    ]
+  }
+}

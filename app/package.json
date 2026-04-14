@@ -30,6 +30,7 @@
     "expo-camera": "~17.0.10",
     "expo-constants": "~18.0.13",
     "expo-dev-client": "~6.0.20",
+    "expo-document-picker": "~14.0.8",
     "expo-font": "~14.0.11",
     "expo-gl": "~16.0.10",
     "expo-haptics": "~15.0.8",
@@ -70,7 +71,7 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
-    "expo-module-scripts": "^55.0.2",
+    "expo-module-scripts": "^3.0.5",
     "typescript": "~5.9.2"
   },
   "private": true

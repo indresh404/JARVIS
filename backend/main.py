@@ -1,6 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-from routes import chat, risk, agents, safety, schemes, auth, family, meds, profiles, checkins
+from routes import chat, risk, agents, safety, schemes, auth, family, meds, profiles, checkins, extract
 from rag.embedder import build_index
 import os
 import logging
@@ -35,6 +37,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    print(f"Validation Error: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -54,6 +64,7 @@ app.include_router(family.router)
 app.include_router(meds.router)
 app.include_router(profiles.router)
 app.include_router(checkins.router)
+app.include_router(extract.router, prefix="/extract", tags=["Extraction"])
 
 @app.get("/")
 async def root():

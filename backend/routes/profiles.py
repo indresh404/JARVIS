@@ -2,7 +2,12 @@ from fastapi import APIRouter, HTTPException
 from services.supabase_service import SupabaseService, supabase
 from services.qr_service import QRService
 
-router = APIRouter(prefix="/profile", tags=["profile"])
+router = APIRouter(prefix="/profiles", tags=["profile"])
+
+@router.get("/all")
+async def get_all_profiles():
+    res = supabase.table("users").select("*").execute()
+    return {"status": "success", "patients": res.data if res.data else []}
 
 @router.get("/{patient_id}")
 async def get_profile(patient_id: str):

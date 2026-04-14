@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
  * - localhost or 127.0.0.1 works for iOS Simulator.
  * - Use your machine's LOCAL IP (e.g., 192.168.1.33) if testing on a PHYSICAL device.
  */
-const PHYSICAL_DEVICE_IP = '192.168.1.33'; // Update this if your IP changes
+const PHYSICAL_DEVICE_IP = '192.168.1.33'; // Discovered active local IP
 const EMULATOR_IP = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
 
 // CHANGE THIS TO TRUE IF TESTING ON A REAL PHONE
@@ -41,5 +41,19 @@ export const API_ENDPOINTS = {
     CHECKINS: {
         PENDING: (id: string) => `/checkins/pending/${id}`,
         SUBMIT: '/checkins/submit',
+        GENERATE: '/chat/checkin-questions',
+    },
+    RISK: {
+        GENERATE: '/risk/generate',
+        PREDICT: '/risk/predict',
+    },
+    SCHEMES: {
+        MATCH: '/schemes/match',
+    },
+    SAFETY: {
+        DRUG_INTERACTION: '/safety/drug-interaction',
+    },
+    EXTRACT: {
+        REPORT: '/extract/report',
     }
 };

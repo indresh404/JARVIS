@@ -15,11 +15,11 @@ class SymptomObj(BaseModel):
 # --- Chat Models ---
 
 class PatientContext(BaseModel):
-    rolling_summary: str
-    profile_summary: str
-    last_7_summaries: List[str]
-    active_medications: List[str]
-    pending_doctor_questions: List[Dict[str, str]]
+    rolling_summary: str = ""
+    profile_summary: str = ""
+    last_7_summaries: List[str] = []
+    active_medications: List[str] = []
+    pending_doctor_questions: List[Dict[str, str]] = []
 
 class ChatMessageInput(BaseModel):
     message: str
@@ -34,7 +34,7 @@ class SymptomExtraction(BaseModel):
     severity: Optional[int] = None
     duration: Optional[str] = None
     onset: Optional[str] = None
-    resolution_status: Literal["active", "improving", "resolved", "unknown"] = "unknown"
+    resolution_status: Optional[Literal["active", "improving", "resolved", "unknown"]] = "unknown"
     confidence: int = 0
     save_ready: bool = False
     clarification_needed: bool = False
@@ -212,6 +212,30 @@ class Hospital(BaseModel):
     distance_km: float
     contact: str
 
+class GenericMedicine(BaseModel):
+    brand_name: str
+    generic_name: str
+    market_price: float
+    jan_aushadhi_price: float
+    savings_percentage: float
+
 class SchemesResponse(BaseModel):
     matched_schemes: List[Scheme]
     nearby_hospitals: List[Hospital]
+    generic_alternatives: List[GenericMedicine] = []
+
+class ExtractedMedication(BaseModel):
+    name: str
+    dosage: str
+    frequency: str
+    purpose: str
+
+class ExtractedCondition(BaseModel):
+    condition: str
+    status: str
+    notes: Optional[str] = None
+
+class ExtractionResponse(BaseModel):
+    success: bool
+    data: Optional[dict] = None  # Contains medications, conditions, summary
+    error: Optional[str] = None

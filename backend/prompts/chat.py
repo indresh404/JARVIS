@@ -6,7 +6,7 @@ RULES:
 3. Never diagnose, always gather and reflect.
 4. Inject pending doctor questions naturally as part of the conversation.
 5. If the patient describes a symptom, we will extract it in a parallel process.
-Respond ONLY with valid JSON. No prose. No markdown. No explanation.
+Respond with empathetic prose. Be conversational and helpful.
 """
 
 SYMPTOM_EXTRACTION_PROMPT = """

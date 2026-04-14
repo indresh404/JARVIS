@@ -14,6 +14,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
+import { backendService } from '@/services/backend.service';
+import { useAuthStore } from '@/store/auth.store';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type StepStatus = 'waiting' | 'running' | 'done' | 'error';
@@ -37,150 +39,16 @@ const PIPELINE: AgentStep[] = [
     icon: 'document-text-outline',
     color: '#0474FC',
     durationMs: 2200,
-    logLines: [
-      '→ Reading conversation_messages from Supabase...',
-      '→ Fetching rolling_summary for patient...',
-      '→ Calling Groq with END_SESSION_PROMPT...',
-      '✓ daily_summary generated',
-      '✓ symptoms_today extracted: [headache, fatigue]',
-      '✓ urgency: Routine',
-      '✓ Inserted into daily_summaries table',
-    ],
+    logLines: [], // Populated dynamically
   },
   {
-    id: 'risk_base',
-    title: 'Base Risk Scoring',
-    subtitle: 'Pure Python — no LLM involved',
+    id: 'risk',
+    title: 'Risk Profile Analysis',
+    subtitle: 'RAG-Enhanced Clinical Risk Model',
     icon: 'calculator-outline',
     color: '#10B981',
-    durationMs: 1400,
-    logLines: [
-      '→ Conditions: [Hypertension] → +15',
-      '→ Symptom severity 4-6: headache → +10',
-      '→ Missed meds days: 1 (< 3 threshold) → +0',
-      '→ Age > 60: false → +0',
-      '→ Wearable flags: none → +0',
-      '✓ base_score = 25',
-    ],
-  },
-  {
-    id: 'rag',
-    title: 'RAG — Clinical Guidelines Retrieval',
-    subtitle: 'FAISS + all-MiniLM-L6-v2 embeddings',
-    icon: 'library-outline',
-    color: '#8B5CF6',
-    durationMs: 2600,
-    logLines: [
-      '→ Query: "hypertension headache risk assessment"',
-      '→ Embedding query with all-MiniLM-L6-v2...',
-      '→ FAISS search over 3 indexed chunks...',
-      '✓ Top match: "sample_hypertension.pdf" (score: 0.91)',
-      '→ Sending base_score + guideline to Groq for adjustment...',
-      '✓ adjustment: +5 (BP-related headache warrants monitoring)',
-      '✓ final_score = 30 | risk_level: Low',
-      '✓ guideline_reference: sample_hypertension.pdf',
-    ],
-  },
-  {
-    id: 'predict',
-    title: 'ML Risk Prediction',
-    subtitle: 'Linear Regression on 14-day score history',
-    icon: 'trending-up-outline',
-    color: '#F59E0B',
-    durationMs: 1800,
-    logLines: [
-      '→ Reading last 14 patient_risk_scores...',
-      '→ Running LinearRegression (scikit-learn)...',
-      '✓ score_slope: +1.2 (mild upward trend)',
-      '✓ volatility: 4.3 (stable)',
-      '✓ trajectory: Stable',
-      '✓ projected_scores[7]: [31,32,33,34,35,36,37]',
-      '→ Early warning check: no repeat symptom pattern',
-      '✓ early_warning: false',
-      '✓ Upserting health_predictions table',
-    ],
-  },
-  {
-    id: 'anomaly',
-    title: 'Wearable Anomaly Detection',
-    subtitle: 'Isolation Forest + Statistical Fallback',
-    icon: 'pulse-outline',
-    color: '#EF4444',
-    durationMs: 1500,
-    logLines: [
-      '→ metric: heart_rate | current: [88, 91, 87]',
-      '→ baseline_14day mean: 75 | std: 6.2',
-      '→ stat_anomaly check: values within 1.5σ → false',
-      '→ IsolationForest model not found for this patient',
-      '✓ detection_source: statistical_fallback',
-      '✓ anomaly_detected: false',
-    ],
-  },
-  {
-    id: 'safety',
-    title: 'Drug Interaction Safety Check',
-    subtitle: 'OpenFDA API → Groq fallback if needed',
-    icon: 'shield-checkmark-outline',
-    color: '#06B6D4',
-    durationMs: 2000,
-    logLines: [
-      '→ Active medicines: [Amlodipine 5mg, Aspirin 81mg]',
-      '→ Calling OpenFDA for interaction pairs...',
-      '✓ OpenFDA: no interaction found for pair 1',
-      '✓ OpenFDA: no interaction found for pair 2',
-      '✓ medicine_risk_score: 12 | no conflicts',
-      '✓ No alerts generated',
-    ],
-  },
-  {
-    id: 'schemes',
-    title: 'Government Scheme Matching',
-    subtitle: 'Pure Python rules — no LLM',
-    icon: 'medal-outline',
-    color: '#F97316',
-    durationMs: 900,
-    logLines: [
-      '→ Patient: age 45 | state: Maharashtra | income: low',
-      '→ Conditions: [hypertension]',
-      '→ Matching against SCHEMES_DATA dict...',
-      '✓ Match: Ayushman Bharat PMJAY (coverage: ₹5,00,000)',
-      '✓ Match: Pradhan Mantri Jan Arogya Yojana',
-      '✓ nearby_hospitals: [KEM Hospital, AIIMS Nagpur]',
-      '✓ Upserted patient_schemes table',
-    ],
-  },
-  {
-    id: 'profile',
-    title: 'Profile Summary Agent',
-    subtitle: 'Groq → PROFILE_PROMPT → permanent facts',
-    icon: 'person-circle-outline',
-    color: '#EC4899',
-    durationMs: 1900,
-    logLines: [
-      '→ Reading all daily_summaries for patient...',
-      '→ Sending to Groq with PROFILE_PROMPT...',
-      '✓ permanent_conditions: [Hypertension]',
-      '✓ recurring_patterns: [Morning headaches after exertion]',
-      '✓ permanent_medications: [Amlodipine 5mg, Aspirin 81mg]',
-      '✓ users table updated with new profile_summary',
-    ],
-  },
-  {
-    id: 'family',
-    title: 'Family AI Agent',
-    subtitle: 'Cross-member pattern detection',
-    icon: 'people-outline',
-    color: '#84CC16',
-    durationMs: 2100,
-    logLines: [
-      '→ Loading family_groups for family_id: FAM-2291...',
-      '→ Members: 3 (adult ×2, child ×1)',
-      '→ Reading symptom_categories (anonymised)...',
-      '→ Sending to Groq with FAMILY_PROMPT...',
-      '✓ Shared pattern: respiratory — 2 members this week',
-      '✓ environmental_risk_flag: true',
-      '✓ family_summary written to family_groups table',
-    ],
+    durationMs: 3000,
+    logLines: [], // Populated dynamically
   },
 ];
 
@@ -311,36 +179,88 @@ export default function AgentLogScreen() {
   const [allDone, setAllDone] = useState(false);
   const headerAnim = useRef(new Animated.Value(0)).current;
 
+  const { user, patientId: storePatientId } = useAuthStore();
+  const patientId = user?.id || storePatientId || 'demo-patient';
+
   useEffect(() => {
     Animated.timing(headerAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
     runPipeline();
   }, []);
 
   const runPipeline = async () => {
-    for (let i = 0; i < PIPELINE.length; i++) {
-      // Mark as running
-      setStepStatuses(prev => {
-        const n = [...prev]; n[i] = 'running'; return n;
-      });
-
-      // Animate log lines in one by one
-      const step = PIPELINE[i];
-      const lineInterval = (step.durationMs * 0.8) / step.logLines.length;
-      for (let l = 1; l <= step.logLines.length; l++) {
-        await delay(lineInterval);
-        setVisibleLogLines(prev => {
-          const n = [...prev]; n[i] = l; return n;
-        });
-      }
-      await delay(step.durationMs * 0.2);
-
-      // Mark done
-      setStepStatuses(prev => {
-        const n = [...prev]; n[i] = 'done'; return n;
-      });
-      setCurrentStep(i + 1);
-      if (i < PIPELINE.length - 1) await delay(300);
+    // ── STEP 1: SUMMARISATION ──────────────────────────────────────────────────
+    setStepStatuses(prev => { const n = [...prev]; n[0] = 'running'; return n; });
+    
+    // Simulate initial log lines
+    const summariserLogs = [
+      '→ Fetching session messages from Supabase...',
+      '→ Analyzing conversation context with Groq...',
+      '→ Applying SESSION_SUMMARIZATION_PROMPT...'
+    ];
+    
+    for (let l = 1; l <= summariserLogs.length; l++) {
+      PIPELINE[0].logLines = summariserLogs.slice(0, l);
+      setVisibleLogLines(prev => { const n = [...prev]; n[0] = l; return n; });
+      await delay(600);
     }
+
+    // Actual API Call
+    const summaryRes = await backendService.endSession(patientId, [], ""); // Simplified for demo
+    if (summaryRes) {
+      const finalLogs = [
+        ...summariserLogs,
+        `✓ daily_summary: ${summaryRes.daily_summary.substring(0, 40)}...`,
+        `✓ Symptoms extracted: ${summaryRes.symptoms_today.length} detected`,
+        `✓ Urgency level: ${summaryRes.urgency}`
+      ];
+      PIPELINE[0].logLines = finalLogs;
+      setVisibleLogLines(prev => { const n = [...prev]; n[0] = finalLogs.length; return n; });
+    }
+    
+    setStepStatuses(prev => { const n = [...prev]; n[0] = 'done'; return n; });
+    await delay(500);
+
+    // ── STEP 2: RISK SCORING ───────────────────────────────────────────────────
+    setStepStatuses(prev => { const n = [...prev]; n[1] = 'running'; return n; });
+    
+    const riskLogs = [
+      '→ Calculating base score (deterministic)...',
+      '→ Performing RAG guideline retrieval...',
+      '→ Adjusting risk based on clinical context...'
+    ];
+
+    for (let l = 1; l <= riskLogs.length; l++) {
+      PIPELINE[1].logLines = riskLogs.slice(0, l);
+      setVisibleLogLines(prev => { const n = [...prev]; n[1] = l; return n; });
+      await delay(800);
+    }
+
+    // Actual API Call
+    const riskData = {
+        patient_id: patientId,
+        summary: summaryRes?.daily_summary || "Routine follow-up",
+        symptoms: summaryRes?.symptoms_today || [],
+        conditions: ["Hypertension"], // Demo context
+        family_history: [],
+        missed_meds_days: 0,
+        wearable_flags: [],
+        age: 45
+    };
+    const riskRes = await backendService.generateRisk(riskData);
+    
+    if (riskRes) {
+      const finalRiskLogs = [
+        ...riskLogs,
+        `✓ Base score: ${riskRes.base_score}`,
+        `✓ RAG Adjustment: ${riskRes.rag_adjustment}`,
+        `✓ Final Risk: ${riskRes.final_score} (${riskRes.risk_level})`,
+        `✓ Reference: ${riskRes.guideline_reference}`
+      ];
+      PIPELINE[1].logLines = finalRiskLogs;
+      setVisibleLogLines(prev => { const n = [...prev]; n[1] = finalRiskLogs.length; return n; });
+    }
+
+    setStepStatuses(prev => { const n = [...prev]; n[1] = 'done'; return n; });
     setAllDone(true);
   };
 

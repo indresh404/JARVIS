@@ -42,7 +42,14 @@ def build_index():
 
     if not os.path.exists(GUIDELINES_DIR):
         os.makedirs(GUIDELINES_DIR)
-        print("created guidelines dir")
+        print("No guidelines directory found. Creating empty directory - RAG will fallback to LLM-only mode.")
+        # Create empty index so app doesn't crash
+        dimension = 384  # all-MiniLM-L6-v2 dimension
+        index = faiss.IndexFlatL2(dimension)
+        faiss.write_index(index, INDEX_PATH)
+        with open(METADATA_PATH, "wb") as f:
+            pickle.dump([], f)
+        print("Empty FAISS index created. RAG retriever will return no results until guidelines are added.")
         return
 
     for filename in os.listdir(GUIDELINES_DIR):

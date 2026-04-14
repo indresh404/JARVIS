@@ -20,6 +20,11 @@
 
 ---
 
+## 🚀 Live Prototype
+
+🔗 [Try Swasthya AI](https://swasthya-ai-rouge.vercel.app)
+
+
 ## Table of Contents
 
 1. [What is Swasthya AI?](#1-what-is-swasthya-ai)

@@ -67,16 +67,49 @@ export const backendService = {
 
     // Main Chat
     sendMessage: async (patientId: string, message: string, context: any) => {
-        return await safeFetchJson(`${BACKEND_URL}${API_ENDPOINTS.CHAT.MESSAGE}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message,
-                patient_id: patientId,
-                session_id: 'main-chat',
-                patient_context: context
-            })
-        });
+        const requestBody = {
+            message: message,
+            patient_id: patientId || 'demo-patient-' + Date.now(),
+            session_id: 'main-chat',
+            patient_context: {
+                rolling_summary: context?.rolling_summary || "New conversation",
+                profile_summary: context?.profile_summary || "",
+                last_7_summaries: context?.last_7_summaries || [],
+                active_medications: context?.active_medications || [],
+                pending_doctor_questions: context?.pending_doctor_questions || []
+            }
+        };
+
+        console.log('📤 Sending chat request:', JSON.stringify(requestBody, null, 2));
+
+        try {
+            const response = await fetch(`${BACKEND_URL}${API_ENDPOINTS.CHAT.MESSAGE}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Chat API error:', response.status, errorText);
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('✅ Chat response:', data);
+            return data;
+        } catch (e) {
+            console.error('🔥 Chat fetch error:', e);
+            // Fallback response for demo/offline mode
+            return {
+                bot_reply: "I'm here to help with your health concerns. Please tell me more about how you're feeling.\n\n⚠️ This is a fallback response. Please check your backend connection.",
+                extracted_symptom: null,
+                clarification_needed: false,
+                save_ready: false,
+                confirmation_required: false,
+                session_updated: false
+            };
+        }
     },
 
     // Medical Report Extraction

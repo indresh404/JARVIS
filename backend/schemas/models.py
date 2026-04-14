@@ -15,11 +15,11 @@ class SymptomObj(BaseModel):
 # --- Chat Models ---
 
 class PatientContext(BaseModel):
-    rolling_summary: str
-    profile_summary: str
-    last_7_summaries: List[str]
-    active_medications: List[str]
-    pending_doctor_questions: List[Dict[str, str]]
+    rolling_summary: str = ""
+    profile_summary: str = ""
+    last_7_summaries: List[str] = []
+    active_medications: List[str] = []
+    pending_doctor_questions: List[Dict[str, str]] = []
 
 class ChatMessageInput(BaseModel):
     message: str
@@ -34,7 +34,7 @@ class SymptomExtraction(BaseModel):
     severity: Optional[int] = None
     duration: Optional[str] = None
     onset: Optional[str] = None
-    resolution_status: Literal["active", "improving", "resolved", "unknown"] = "unknown"
+    resolution_status: Optional[Literal["active", "improving", "resolved", "unknown"]] = "unknown"
     confidence: int = 0
     save_ready: bool = False
     clarification_needed: bool = False

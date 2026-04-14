@@ -112,6 +112,14 @@ export default function ChatScreen() {
     setIsLoading(true);
 
     const sessionId = 'session-' + (user?.id || 'demo');
+    const context = {
+      rolling_summary: "Initial onboarding conversation",
+      profile_summary: "New patient onboarding",
+      last_7_summaries: [],
+      active_medications: [],
+      pending_doctor_questions: []
+    };
+
     fetch(`${BACKEND_URL}${API_ENDPOINTS.CHAT.MESSAGE}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -119,6 +127,7 @@ export default function ChatScreen() {
         patient_id: user?.id || 'demo-patient',
         session_id: sessionId,
         message: currentInput,
+        patient_context: context,
       }),
     })
       .then(res => res.json())

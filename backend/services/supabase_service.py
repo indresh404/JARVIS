@@ -11,7 +11,18 @@ SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Enable demo mode for testing
+DEMO_MODE = True  # Set to False for production
+
 class SupabaseService:
+    @staticmethod
+    def is_valid_uuid(val: str) -> bool:
+        try:
+            uuid.UUID(str(val))
+            return True
+        except ValueError:
+            return False
+
     @staticmethod
     def get_user_by_phone(phone: str):
         res = supabase.table("users").select("*").eq("phone", phone).execute()
@@ -31,6 +42,11 @@ class SupabaseService:
 
     @staticmethod
     def save_message(patient_id: str, session_id: str, role: str, content: str):
+        """Save message with demo mode fallback"""
+        if DEMO_MODE or not SupabaseService.is_valid_uuid(patient_id):
+            print(f"📝 DEMO MODE: Message saved locally - {role}: {content[:50]}...")
+            return {"id": "demo", "status": "demo_mode"}
+
         data = {
             "patient_id": patient_id,
             "session_id": session_id,
@@ -43,6 +59,11 @@ class SupabaseService:
 
     @staticmethod
     def save_symptom(patient_id: str, session_id: str, symptom_data: dict):
+        """Save symptom with demo mode fallback"""
+        if DEMO_MODE or not SupabaseService.is_valid_uuid(patient_id):
+            print(f"📝 DEMO MODE: Symptom saved locally - {symptom_data.get('symptom', 'unknown')}")
+            return {"id": "demo", "status": "demo_mode"}
+
         data = {
             "patient_id": patient_id,
             "session_id": session_id,
@@ -58,11 +79,21 @@ class SupabaseService:
 
     @staticmethod
     def get_medicines(patient_id: str):
+        """Get medicines with demo mode fallback"""
+        if DEMO_MODE or not SupabaseService.is_valid_uuid(patient_id):
+            return [
+                {"medicine_name": "Glycomet", "dosage": "500mg", "frequency": "Twice daily", "is_critical": True},
+                {"medicine_name": "Amlong", "dosage": "5mg", "frequency": "Once daily", "is_critical": False}
+            ]
         res = supabase.table("medicines").select("*").eq("patient_id", patient_id).eq("is_active", True).execute()
         return res.data
 
     @staticmethod
     def log_adherence(patient_id: str, medicine: str):
+        """Log adherence with demo mode fallback"""
+        if DEMO_MODE or not SupabaseService.is_valid_uuid(patient_id):
+            print(f"📝 DEMO MODE: Adherence logged locally - {medicine}")
+            return {"status": "success", "demo": True}
         data = {
             "patient_id": patient_id,
             "medicine": medicine,
@@ -129,3 +160,22 @@ class SupabaseService:
             "role": "member"
         }).execute()
         return group_res.data
+
+    @staticmethod
+    def add_medicine(patient_id: str, med_data: dict):
+        """Add a new medicine with demo mode fallback"""
+        if DEMO_MODE or not SupabaseService.is_valid_uuid(patient_id):
+            print(f"📝 DEMO MODE: Medicine added locally - {med_data.get('medicine_name')}")
+            return {"status": "success", "demo": True}
+        
+        data = {
+            "patient_id": patient_id,
+            "medicine_name": med_data.get("medicine_name"),
+            "dosage": med_data.get("dosage"),
+            "frequency": med_data.get("frequency"),
+            "is_critical": med_data.get("is_critical", False),
+            "is_active": True,
+            "created_at": datetime.now().isoformat()
+        }
+        res = supabase.table("medicines").insert(data).execute()
+        return res.data

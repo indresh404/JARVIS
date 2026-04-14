@@ -12,7 +12,27 @@ METADATA_PATH = f"{INDEX_DIR}/metadata.pkl"
 
 os.makedirs(INDEX_DIR, exist_ok=True)
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+MODEL_NAME = 'all-MiniLM-L6-v2'
+CACHE_DIR = "rag/model_cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+_model = None
+
+def get_model():
+    """Lazy initialization of the SentenceTransformer model with local caching and error handling."""
+    global _model
+    if _model is None:
+        try:
+            print(f"🔄 Initializing embedding model: {MODEL_NAME}...")
+            # Use local cache to ensure persistence and control
+            _model = SentenceTransformer(MODEL_NAME, cache_folder=CACHE_DIR)
+            print("✅ Embedding model loaded successfully.")
+        except Exception as e:
+            print(f"❌ Failed to load embedding model: {e}")
+            print("💡 TIP: Check your internet connection or try setting HF_ENDPOINT=https://hf-mirror.com in your .env")
+            # Return a dummy model or raise if critical
+            raise e
+    return _model
 
 def get_metadata(filename):
     """Assign metadata based on filename for sample implementation"""
@@ -75,7 +95,7 @@ def build_index():
         print("No documents found to index.")
         return
 
-    embeddings = model.encode(all_chunks)
+    embeddings = get_model().encode(all_chunks)
     dimension = embeddings.shape[1]
     index = faiss.IndexFlatL2(dimension)
     index.add(np.array(embeddings).astype('float32'))

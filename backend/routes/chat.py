@@ -11,32 +11,59 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 @router.post("/message", response_model=ChatResponse)
 async def chat_message(data: ChatMessageInput):
     """
-    POST /chat/message
-    Handles patient messages, extracts symptoms in parallel, and manages clarification/confirmation turns.
+    POST /chat/message - Handles patient messages with demo mode support
     """
-    # 1. Persist User Message
-    SupabaseService.save_message(data.patient_id, data.session_id, "user", data.message)
+    print(f"📨 Received message from {data.patient_id}: {data.message}")
 
-    # 2. Build context
-    context_str = f"Rolling Summary: {data.patient_context.rolling_summary}\nProfile: {data.patient_context.profile_summary}"
-    
-    # 3. Call Groq for reply and extraction in parallel
+    # Persistence attempt (User Message)
     try:
-        reply_task = call_groq(CHAT_SYSTEM_PROMPT, f"Context: {context_str}\nMessage: {data.message}")
-        extract_task = call_groq(SYMPTOM_EXTRACTION_PROMPT, f"Extract from: {message if 'message' in locals() else data.message}")
-        bot_reply, extraction_json = await asyncio.gather(reply_task, extract_task)
-        extraction_data = json.loads(extraction_json)
-        
-        if "error" in extraction_data:
-            raise ValueError(extraction_data["error"])
-        extraction = SymptomExtraction(**extraction_data)
+        SupabaseService.save_message(data.patient_id, data.session_id, "user", data.message)
     except Exception as e:
-        print(f"Chat Message AI Fallback Triggered: {e}")
-        bot_reply = "I understand. Can you tell me more about how you're feeling?"
+        print(f"⚠️ Persistence skipped (User): {e}")
+
+    # Build context
+    context_str = f"Rolling Summary: {data.patient_context.rolling_summary}\nProfile: {data.patient_context.profile_summary}"
+
+    # Call AI for reply and extraction
+    try:
+        # 1. AI Reply (Conversational, NOT JSON)
+        bot_reply = await call_groq(
+            CHAT_SYSTEM_PROMPT,
+            f"Context: {context_str}\nPatient: {data.message}\n\nRespond helpfully as a health assistant.",
+            json_mode=False
+        )
+
+        # Check if Groq returned an internal error message
+        if bot_reply.startswith('{"error":'):
+            error_data = json.loads(bot_reply)
+            print(f"❌ Groq internal error found in reply: {error_data}")
+            bot_reply = "I understand. Could you tell me more about your symptoms?"
+
+        # 2. Symptom Extraction (JSON Mode)
+        try:
+            extraction_json = await call_groq(
+                SYMPTOM_EXTRACTION_PROMPT,
+                f"Extract symptoms from: {data.message}",
+                json_mode=True
+            )
+            extraction_data = json.loads(extraction_json)
+            if "error" in extraction_data:
+                 raise ValueError(extraction_data["error"])
+            extraction = SymptomExtraction(**extraction_data)
+        except Exception as e:
+            print(f"⚠️ Symptom extraction skipped/failed: {e}")
+            extraction = None
+
+    except Exception as e:
+        print(f"❌ AI Core Error: {e}")
+        bot_reply = "I understand you're sharing health information. Could you tell me more about your symptoms?"
         extraction = None
 
-    # 4. Persist Bot Reply
-    SupabaseService.save_message(data.patient_id, data.session_id, "assistant", bot_reply)
+    # Persistence attempt (Bot Reply)
+    try:
+        SupabaseService.save_message(data.patient_id, data.session_id, "assistant", bot_reply)
+    except Exception as e:
+        print(f"⚠️ Persistence skipped (Assistant): {e}")
 
     clarification_needed = False
     save_ready = False
@@ -51,7 +78,10 @@ async def chat_message(data: ChatMessageInput):
         elif extraction.confidence >= 70:
             save_ready = True
             # Persist Symptom if ready
-            SupabaseService.save_symptom(data.patient_id, data.session_id, extraction.model_dump())
+            try:
+                SupabaseService.save_symptom(data.patient_id, data.session_id, extraction.model_dump())
+            except Exception as e:
+                print(f"⚠️ Symptom persistence skipped: {e}")
 
     return ChatResponse(
         bot_reply=bot_reply,

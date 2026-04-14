@@ -10,6 +10,7 @@ import {
   Text, TouchableOpacity, View, Alert, Modal, TextInput, Animated
 } from 'react-native';
 import { getMedicines, logMedAdherence } from '@/services/supabase.service';
+import { backendService } from '@/services/backend.service';
 import { useAuthStore } from '@/store/auth.store';
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -137,7 +138,8 @@ const AIAnalysisPanel = ({ visible, onClose, medName }: { visible: boolean; onCl
   const dotAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (visible) {
+    async function runAnalysis() {
+      if (!visible) return;
       setAnalysing(true);
       setResult(null);
       Animated.loop(
@@ -146,12 +148,34 @@ const AIAnalysisPanel = ({ visible, onClose, medName }: { visible: boolean; onCl
           Animated.timing(dotAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
         ])
       ).start();
-      setTimeout(() => {
-        const found = FAKE_ANALYSIS.find(a => a.medicine === medName) || FAKE_ANALYSIS[0];
-        setResult(found);
+
+      try {
+        const res = await backendService.checkInteraction({
+            new_medicine: medName,
+            active_medicines: ["Amlodipine 5mg", "Metformin 500mg"], // Demo context
+            patient_conditions: ["Hypertension", "Diabetes"]
+        });
+
+        if (res) {
+            setResult({
+                status: res.conflict_found ? 'danger' : 'safe',
+                note: res.warning_text || res.recommendation,
+                color: res.conflict_found ? '#EF4444' : '#10B981',
+                icon: res.conflict_found ? 'warning' : 'checkmark-circle'
+            });
+        }
+      } catch (e) {
+        setResult({
+            status: 'warning',
+            note: 'Safety check partially unavailable. Consult your doctor.',
+            color: '#F59E0B',
+            icon: 'alert-circle'
+        });
+      } finally {
         setAnalysing(false);
-      }, 2200);
+      }
     }
+    runAnalysis();
   }, [visible, medName]);
 
   if (!visible) return null;
@@ -204,6 +228,7 @@ export default function MedsScreen() {
   const [selectedMed, setSelectedMed] = useState('');
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [newMedName, setNewMedName] = useState('');
+  const [genericAlts, setGenericAlts] = useState<any[]>([]);
 
   const { user, patientId: storePatientId } = useAuthStore();
   const patientId = user?.id || storePatientId || 'demo-patient';
@@ -227,6 +252,26 @@ export default function MedsScreen() {
       ]);
     } finally {
       setLoading(false);
+      // Fetch generic alternatives
+      fetchGenerics();
+    }
+  };
+
+  const fetchGenerics = async () => {
+    try {
+      const res = await backendService.matchSchemes({
+        patient_id: patientId,
+        age: 45,
+        income_category: 'Low',
+        state: 'Maharashtra',
+        confirmed_conditions: ['Hypertension', 'Diabetes'], // Simulated matching
+        current_risk_level: 'Moderate'
+      });
+      if (res?.generic_alternatives) {
+        setGenericAlts(res.generic_alternatives);
+      }
+    } catch (e) {
+      console.error("Failed to fetch generics:", e);
     }
   };
 
@@ -310,6 +355,39 @@ export default function MedsScreen() {
                 </View>
               </View>
             ))}
+            {genericAlts.length > 0 && (
+              <>
+                <Text style={[styles.sectionLabel, { marginTop: 24 }]}>💊 Affordable Alternatives</Text>
+                <View style={styles.affordabilityCard}>
+                  <View style={styles.affordabilityHeader}>
+                    <Text style={styles.affordabilityTitle}>Pradhan Mantri Jan Aushadhi</Text>
+                    <View style={styles.savingsBadge}>
+                      <Text style={styles.savingsBadgeText}>Save up to 80%</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.affordabilitySub}>Generic equivalents available at government outlets:</Text>
+                  
+                  {genericAlts.map((item, idx) => (
+                    <View key={idx} style={styles.genericItem}>
+                      <View style={styles.genericInfo}>
+                        <Text style={styles.brandName}>{item.brand_name}</Text>
+                        <Ionicons name="arrow-forward" size={14} color="#9CA3AF" />
+                        <Text style={styles.genericName}>{item.generic_name}</Text>
+                      </View>
+                      <View style={styles.priceRow}>
+                        <Text style={styles.marketPrice}>₹{item.market_price}</Text>
+                        <Text style={styles.janPrice}>₹{item.jan_aushadhi_price}</Text>
+                      </View>
+                    </View>
+                  ))}
+                  
+                  <TouchableOpacity style={styles.findStoreBtn}>
+                    <Text style={styles.findStoreText}>Find nearest Jan Aushadhi store</Text>
+                    <Ionicons name="location-outline" size={16} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
             <View style={{ height: 40 }} />
           </ScrollView>
         )}
@@ -432,4 +510,21 @@ const styles = StyleSheet.create({
   avatarButton: { shadowColor: '#0474FC', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
   avatarGradient: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 18, fontWeight: '600', color: '#FFFFFF' },
+
+  // Affordability
+  affordabilityCard: { backgroundColor: '#F0F9FF', borderRadius: 16, padding: 16, borderLeftWidth: 4, borderLeftColor: '#0EA5E9', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  affordabilityHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  affordabilityTitle: { fontSize: 14, fontWeight: '700', color: '#0369A1' },
+  savingsBadge: { backgroundColor: '#BAE6FD', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  savingsBadgeText: { fontSize: 10, fontWeight: '700', color: '#0369A1' },
+  affordabilitySub: { fontSize: 12, color: '#0369A1', marginBottom: 16, opacity: 0.8 },
+  genericItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 10, borderRadius: 12, marginBottom: 8 },
+  genericInfo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  brandName: { fontSize: 12, fontWeight: '500', color: '#6B7280', textDecorationLine: 'line-through' },
+  genericName: { fontSize: 13, fontWeight: '700', color: '#0369A1' },
+  priceRow: { alignItems: 'flex-end' },
+  marketPrice: { fontSize: 10, color: '#9CA3AF', textDecorationLine: 'line-through' },
+  janPrice: { fontSize: 14, fontWeight: '800', color: '#0EA5E9' },
+  findStoreBtn: { backgroundColor: '#0EA5E9', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, marginTop: 8 },
+  findStoreText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
 });

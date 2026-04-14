@@ -212,6 +212,14 @@ class Hospital(BaseModel):
     distance_km: float
     contact: str
 
+class GenericMedicine(BaseModel):
+    brand_name: str
+    generic_name: str
+    market_price: float
+    jan_aushadhi_price: float
+    savings_percentage: float
+
 class SchemesResponse(BaseModel):
     matched_schemes: List[Scheme]
     nearby_hospitals: List[Hospital]
+    generic_alternatives: List[GenericMedicine] = []

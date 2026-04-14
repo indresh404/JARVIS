@@ -43,10 +43,22 @@ HOSPITALS_DB = {
     ]
 }
 
+# Mock Database for Jan Aushadhi Generic Medicines
+GENERIC_DB = [
+    {"brand": "Glycomet 500mg", "generic": "Metformin 500mg", "price": 45.0, "jan_price": 9.5},
+    {"brand": "Amlong 5mg", "generic": "Amlodipine 5mg", "price": 68.0, "jan_price": 12.0},
+    {"brand": "Telma 40", "generic": "Telmisartan 40mg", "price": 105.0, "jan_price": 22.0},
+    {"brand": "Ecosprin 75", "generic": "Aspirin 75mg", "price": 25.0, "jan_price": 5.0},
+    {"brand": "Caldikind", "generic": "Calcium + Vitamin D3", "price": 180.0, "jan_price": 45.0},
+    {"brand": "Augmentin 625", "generic": "Amoxicillin + Clavulanic Acid 625mg", "price": 210.0, "jan_price": 55.0},
+    {"brand": "Pantocid 40", "generic": "Pantoprazole 40mg", "price": 140.0, "jan_price": 32.0},
+    {"brand": "Zyrtec", "generic": "Cetirizine 10mg", "price": 40.0, "jan_price": 8.0},
+]
+
 @router.post("/match", response_model=SchemesResponse)
 async def match_schemes(data: SchemeMatchInput):
     """
-    Match patient profile against hardcoded eligibility rules.
+    Match patient profile against hardcoded eligibility rules and generic medicines.
     """
     matched = []
     
@@ -68,7 +80,28 @@ async def match_schemes(data: SchemeMatchInput):
     # Filter hospitals by state
     hospitals = HOSPITALS_DB.get(data.state, [])[:3]
 
+    # Find generic alternatives for confirmed conditions (simulated)
+    generic_alts = []
+    # If the patient has conditions like hypertension or diabetes, show relevant generic medicines
+    relevant_generics = []
+    if any(c in ["Hypertension", "BP", "High BP"] for c in data.confirmed_conditions):
+        relevant_generics.extend(["Amlodipine 5mg", "Telmisartan 40mg", "Aspirin 75mg"])
+    if any(c in ["Diabetes", "Sugar"] for c in data.confirmed_conditions):
+        relevant_generics.extend(["Metformin 500mg"])
+    
+    for gen in GENERIC_DB:
+        if gen["generic"] in relevant_generics:
+            savings = ((gen["price"] - gen["jan_price"]) / gen["price"]) * 100
+            generic_alts.append(GenericMedicine(
+                brand_name=gen["brand"],
+                generic_name=gen["generic"],
+                market_price=gen["price"],
+                jan_aushadhi_price=gen["jan_price"],
+                savings_percentage=round(savings, 2)
+            ))
+
     return SchemesResponse(
         matched_schemes=matched,
-        nearby_hospitals=hospitals
+        nearby_hospitals=hospitals,
+        generic_alternatives=generic_alts
     )

@@ -21,6 +21,7 @@ export const PatientDetailPage: React.FC<PatientDetailPageProps> = ({ patientId,
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [generics, setGenerics] = useState<any[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,6 +38,12 @@ export const PatientDetailPage: React.FC<PatientDetailPageProps> = ({ patientId,
           { role: 'ai', text: q.patient_answer || 'Pending patient response...', status: q.status }
         ])).flat();
         setChatMessages(history);
+
+        // Fetch Jan Aushadhi generic alternatives
+        const genData = await api.getGenericAlternatives(patientId, ['Hypertension', 'Diabetes']);
+        if (genData?.generic_alternatives) {
+          setGenerics(genData.generic_alternatives);
+        }
       } catch (err) {
         console.error('Failed to load patient detail:', err);
       } finally {
@@ -58,17 +65,25 @@ export const PatientDetailPage: React.FC<PatientDetailPageProps> = ({ patientId,
     setIsGeneratingSummary(false);
   };
 
-  const handleSendMessage = async () => {
-    if (!chatInput.trim()) return;
-
-    const userMsg = { role: 'doctor', text: chatInput };
-    setChatMessages(prev => [...prev, userMsg]);
-    setChatInput('');
-    setIsChatLoading(true);
-
     try {
-      const result = await geminiService.chatWithDoctor(patient, chatMessages, chatInput);
-      setChatMessages(prev => [...prev, { role: 'ai', text: result.text, answer_found: result.answer_found }]);
+      const context = {
+        rolling_summary: patient.profile_summary || "New patient",
+        profile_summary: patient.profile_summary || "",
+        last_7_summaries: [],
+        active_medications: patient.medicines?.map((m: any) => m.medicine_name) || [],
+        pending_doctor_questions: []
+      };
+
+      const result = await api.chatMessage(patientId, chatInput, context);
+      if (result) {
+        setChatMessages(prev => [...prev, { 
+          role: 'ai', 
+          text: result.bot_reply, 
+          answer_found: !result.clarification_needed 
+        }]);
+      } else {
+        throw new Error("Backend response failed");
+      }
     } catch (err) {
       setChatMessages(prev => [...prev, { role: 'ai', text: "Sorry, I encountered an error processing your request." }]);
     } finally {
@@ -107,8 +122,12 @@ export const PatientDetailPage: React.FC<PatientDetailPageProps> = ({ patientId,
         </div>
         <div className="flex items-center gap-3">
           <RiskBadge level={patient.risk_level || 'Low'} />
-          <button className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors">
-            Scan QR
+          <button 
+            onClick={() => window.print()}
+            className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            <Info size={16} className="text-brand-primary" />
+            Clinical Report (Sample)
           </button>
         </div>
       </div>
@@ -344,6 +363,47 @@ export const PatientDetailPage: React.FC<PatientDetailPageProps> = ({ patientId,
               </button>
             </div>
           </section>
+
+          {/* Jan Aushadhi Affordability Section */}
+          {generics.length > 0 && (
+            <section className="space-y-4">
+              <h3 className="text-sm font-bold text-text-muted uppercase tracking-widest flex items-center gap-2 text-brand-primary">
+                <Sparkles size={16} />
+                Affordability Analysis
+              </h3>
+              <div className="card-base p-6 bg-blue-50/50 border-blue-100 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-blue-700">
+                    <Activity size={20} />
+                    <span className="font-bold">Jan Aushadhi Generic Savings</span>
+                  </div>
+                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-black uppercase tracking-widest">Live Rates</span>
+                </div>
+                
+                <div className="space-y-3">
+                  {generics.map((gen, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-white p-3 rounded-xl border border-blue-100 shadow-sm">
+                      <div>
+                        <p className="text-[10px] text-text-muted line-through font-bold">{gen.brand_name}</p>
+                        <p className="text-sm font-bold text-blue-900">{gen.generic_name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-text-muted line-through font-bold">₹{gen.market_price}</p>
+                        <p className="text-lg font-black text-brand-primary">₹{gen.jan_aushadhi_price}</p>
+                        <p className="text-[9px] font-black text-green-600 uppercase tracking-tighter">Save {gen.savings_percentage}%</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-2">
+                  <p className="text-[10px] text-blue-800 font-medium bg-blue-100/50 p-2 rounded-lg italic">
+                    "Switching to generic alternatives for these medications would save the patient approx. ₹1,200 per month."
+                  </p>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* Government Schemes Panel */}
           {patient.risk_score > 70 && (

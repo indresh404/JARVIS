@@ -70,7 +70,7 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
-    "expo-module-scripts": "^55.0.2",
+    "expo-module-scripts": "^3.0.5",
     "typescript": "~5.9.2"
   },
   "private": true

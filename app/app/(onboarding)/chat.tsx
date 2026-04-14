@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/store/auth.store';
 import { supabase } from '@/services/supabaseClient';
+import { backendService } from '@/services/backend.service';
 import { BACKEND_URL, API_ENDPOINTS } from '@/config/api';
 
 interface Message {
@@ -187,7 +188,11 @@ export default function ChatScreen() {
         </View>
         <Text style={styles.headerTitle}>AI Health Assistant</Text>
         <TouchableOpacity
-          onPress={() => router.push('/(onboarding)/agent-log')}
+          onPress={async () => {
+            // End session and trigger agents before navigating
+            await backendService.endSession(user?.id || 'demo', messages.map(m => ({ role: m.isUser ? 'user' : 'assistant', content: m.text })), "");
+            router.push('/(onboarding)/agent-log');
+          }}
           style={styles.doneButton}
         >
           <Text style={styles.doneButtonText}>Done</Text>

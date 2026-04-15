@@ -21,11 +21,24 @@ class PatientContext(BaseModel):
     active_medications: List[str] = []
     pending_doctor_questions: List[Dict[str, str]] = []
 
+class FrontendSymptom(BaseModel):
+    """Structured symptom extracted by on-device NLP before sending to backend"""
+    has_symptom: bool = False
+    symptom: Optional[str] = None
+    body_zone: Optional[Literal["head", "chest", "stomach", "back", "legs", "lungs", "systemic"]] = None
+    severity: Optional[int] = None
+    confidence: Optional[int] = None
+    duration: Optional[str] = None
+
 class ChatMessageInput(BaseModel):
     message: str
     patient_id: str
     session_id: str
     patient_context: PatientContext
+    # 🔥 Hybrid architecture: frontend sends structured symptoms + conversation context
+    symptoms: List[FrontendSymptom] = []            # On-device extracted symptoms (MOST IMPORTANT)
+    conversation_log: List[Dict[str, str]] = []     # Full chat history for context
+
 
 class SymptomExtraction(BaseModel):
     has_symptom: bool = False

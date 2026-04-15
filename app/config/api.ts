@@ -58,3 +58,9 @@ export const API_ENDPOINTS = {
         REPORT: '/extract/report',
     }
 };
+
+console.log("🔥 BACKEND URL:", BACKEND_URL);
+declare global {
+  var symptoms: any;
+}
+globalThis.symptoms = globalThis.symptoms || [];

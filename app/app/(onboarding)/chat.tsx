@@ -1,4 +1,3 @@
-// app/(onboarding)/chat.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -18,13 +17,22 @@ import { router } from 'expo-router';
 import { useAuthStore } from '@/store/auth.store';
 import { supabase } from '@/services/supabaseClient';
 import { backendService } from '@/services/backend.service';
-import { BACKEND_URL, API_ENDPOINTS } from '@/config/api';
 
 interface Message {
   id: string;
   text: string;
   isUser: boolean;
   timestamp: Date;
+}
+
+// ✅ Define symptom type
+interface Symptom {
+  symptom: string;
+  body_zone?: string;
+  severity?: number;
+  duration?: string;
+  has_symptom: boolean;
+  confidence?: number;
 }
 
 export default function ChatScreen() {
@@ -40,6 +48,17 @@ export default function ChatScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuthStore();
   const [userName, setUserName] = useState('User');
+  
+  // ✅ Track conversation for backend
+  const [conversationLog, setConversationLog] = useState<any[]>([]);
+  const [extractedSymptoms, setExtractedSymptoms] = useState<Symptom[]>([]);
+  const [context, setContext] = useState({
+    rolling_summary: "Initial health assessment conversation",
+    profile_summary: "New patient - gathering health history",
+    last_7_summaries: [],
+    active_medications: [],
+    pending_doctor_questions: []
+  });
 
   useEffect(() => {
     if (user) {
@@ -63,26 +82,84 @@ export default function ChatScreen() {
 
   const flatListRef = useRef<FlatList>(null);
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
   }, [messages]);
 
-  // Handle session end on unmount
-  useEffect(() => {
-    return () => {
-      if (user?.id) {
-        const sessionId = 'session-' + user.id;
-        fetch(`${BACKEND_URL}${API_ENDPOINTS.CHAT.END_SESSION}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ patient_id: user.id, session_id: sessionId })
-        }).catch(e => console.error("End session error:", e));
-      }
+  // ✅ FIXED: Using ONLY backendService.sendMessage()
+  const handleSendMessage = async (): Promise<void> => {
+    if (!inputText.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: inputText,
+      isUser: true,
+      timestamp: new Date(),
     };
-  }, [user]);
+    
+    setMessages(prev => [...prev, userMessage]);
+    
+    // ✅ Update conversation log
+    const updatedLog = [
+      ...conversationLog,
+      { role: 'user', content: inputText }
+    ];
+    setConversationLog(updatedLog);
+    
+    const currentInput = inputText;
+    setInputText('');
+    setIsLoading(true);
+
+    try {
+      // ✅ SINGLE SOURCE OF TRUTH - Using backendService
+      const data = await backendService.sendMessage(
+        user?.id || 'demo-patient',
+        currentInput,
+        context,
+        extractedSymptoms,  // Send any previously extracted symptoms
+        updatedLog          // Send full conversation history
+      );
+
+      // Extract symptoms from response if any
+      if (data?.extracted_symptom && data.extracted_symptom.has_symptom) {
+        setExtractedSymptoms(prev => [...prev, data.extracted_symptom]);
+        
+        // Update context with new symptom info
+        if (data.extracted_symptom.symptom) {
+          setContext(prev => ({
+            ...prev,
+            rolling_summary: `${prev.rolling_summary} Patient reported ${data.extracted_symptom.symptom}.`
+          }));
+        }
+      }
+
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: data?.bot_reply || getFallbackReply(currentInput),
+        isUser: false,
+        timestamp: new Date(),
+      };
+      
+      setMessages(prev => [...prev, aiResponse]);
+      
+      // ✅ Update conversation log with assistant response
+      setConversationLog(prev => [...prev, { role: 'assistant', content: aiResponse.text }]);
+
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        text: getFallbackReply(currentInput),
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const getFallbackReply = (input: string): string => {
     const msg = input.toLowerCase();
@@ -96,65 +173,6 @@ export default function ChatScreen() {
     if (msg.includes('sleep') || msg.includes('insomnia')) return 'Sleep quality directly impacts your heart health and blood pressure. 7-8 hours is recommended. Any difficulty falling asleep or staying asleep?';
     return 'Thank you for sharing that. I\'m tracking this information to build your health profile. Can you tell me more, or is there a specific symptom you\'d like to discuss?';
   };
-
-  const handleSendMessage = async (): Promise<void> => {
-    if (!inputText.trim()) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: inputText,
-      isUser: true,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, userMessage]);
-    const currentInput = inputText;
-    setInputText('');
-    setIsLoading(true);
-
-    const sessionId = 'session-' + (user?.id || 'demo');
-    const context = {
-      rolling_summary: "Initial onboarding conversation",
-      profile_summary: "New patient onboarding",
-      last_7_summaries: [],
-      active_medications: [],
-      pending_doctor_questions: []
-    };
-
-    fetch(`${BACKEND_URL}${API_ENDPOINTS.CHAT.MESSAGE}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        patient_id: user?.id || 'demo-patient',
-        session_id: sessionId,
-        message: currentInput,
-        patient_context: context,
-      }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        const aiResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          text: data.bot_reply || getFallbackReply(currentInput),
-          isUser: false,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, aiResponse]);
-      })
-      .catch(() => {
-        const errorMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          text: getFallbackReply(currentInput),
-          isUser: false,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, errorMsg]);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  };
-
-
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -187,7 +205,6 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#0474FC" />
@@ -198,8 +215,11 @@ export default function ChatScreen() {
         <Text style={styles.headerTitle}>AI Health Assistant</Text>
         <TouchableOpacity
           onPress={async () => {
-            // End session and trigger agents before navigating
-            await backendService.endSession(user?.id || 'demo', messages.map(m => ({ role: m.isUser ? 'user' : 'assistant', content: m.text })), "");
+            await backendService.endSession(
+              user?.id || 'demo', 
+              conversationLog,  // ✅ Send actual conversation log
+              context.rolling_summary
+            );
             router.push('/(onboarding)/agent-log');
           }}
           style={styles.doneButton}
@@ -209,7 +229,6 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Messages */}
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -219,7 +238,6 @@ export default function ChatScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Loading Indicator */}
       {isLoading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color="#0474FC" />
@@ -227,7 +245,6 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {/* Input Area */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
@@ -306,9 +323,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
-  },
-  headerRight: {
-    width: 40,
   },
   messagesList: {
     padding: 16,

@@ -16,8 +16,9 @@ import { ScreenWrapper } from '@/components/shared/ScreenWrapper';
 import { ChatBubble } from '@/components/chat/ChatBubble';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/theme';
-// ✅ v4 — NO BACKEND — LOCAL NLP ONLY
-console.log('🔴🔴 SWASTHYA AI v4 LOADED — ' + new Date().toISOString());
+import { backendService } from '@/services/backend.service';
+// ✅ v5 — HYBRID ARCHITECTURE: On-device NLP + Backend RAG
+console.log('🔴🔴 SWASTHYA AI v5 HYBRID LOADED — ' + new Date().toISOString());
 
 
 // ─────────────────────────────────────────────
@@ -315,7 +316,7 @@ export default function AIBotScreen() {
   }, [push]);
 
   // ─────────────────────────────────────────────
-  //  SEND — local NLP only, always High/Critical
+  //  SEND — Hybrid: Local NLP + Backend RAG
   // ─────────────────────────────────────────────
   const handleSend = useCallback(async () => {
     if (!text.trim() || isLoading || agentRunning) return;
@@ -323,64 +324,92 @@ export default function AIBotScreen() {
     const inputText = text.trim();
     setText('');
     setIsLoading(true);
-    setBackendOnline(false); // always show "Local NLP" — no backend dependency
 
-    push({ id:`u-${Date.now()}`, role:'user', content: inputText });
+    const userMsg: ChatMessage = { id:`u-${Date.now()}`, role:'user', content: inputText };
+    push(userMsg);
 
-    // ── 1. Extract symptoms from user's text ──
+    // ── 1. On-device NLP extraction (instant) ──
     const extracted = localExtract(inputText);
     const critical  = isLocalCritical(inputText);
 
-    // ── 2. Build a contextual bot reply ───────
-    let botReply = '';
-    const sym  = extracted.symptom;
-    const zone = extracted.body_zone;
-    const sev  = extracted.severity ?? 5;
+    // Build symptoms array for backend
+    const symptomsPayload = extracted.has_symptom ? [extracted] : [];
 
-    if (critical) {
-      const zone2label: Record<string,string> = {
-        chest:'CARDIAC', lungs:'RESPIRATORY', systemic:'NEUROLOGICAL'
-      };
-      const label = zone ? (zone2label[zone] ?? 'CRITICAL') : 'CRITICAL';
-      botReply =
-        `🚨 *${label} EMERGENCY DETECTED*\n\n` +
-        `Symptom: *${sym ?? inputText}* — Severity ${sev}/10\n\n` +
-        `⚡ Emergency Risk Agent is now activating...\n` +
-        `Your profile (HTN + Diabetes + Cardiac Hx) makes this a *HIGH-PRIORITY* situation.\n\n` +
-        `Please sit down and do NOT exert yourself. Call *112* if symptoms worsen.`;
-    } else if (sym) {
-      const advice: Record<string,string> = {
-        chest:   'Sit and rest immediately. Avoid any exertion.',
-        lungs:   'Breathe slowly and calmly. Try steam inhalation.',
-        head:    'Rest in a dark, quiet room. Drink water.',
-        systemic:'Rest and stay hydrated. Monitor temperature.',
-        stomach: 'Eat light meals. Avoid spicy or oily food.',
-        back:    'Avoid heavy lifting. Apply a warm compress.',
-        legs:    'Elevate your legs. Monitor for swelling.',
-      };
-      const tip = zone ? (advice[zone] ?? 'Monitor closely and consult your doctor.') : 'Monitor closely.';
-      botReply =
-        `I've detected: *${sym}*\n` +
-        `Severity: ${sev}/10 | Zone: ${zone}\n\n` +
-        `${tip}\n\n` +
-        `How long have you had this? Are there any other symptoms alongside?`;
-    } else {
-      // General message — still run full agent pipeline but with a generic symptom
-      const fallbacks = [
-        "Could you describe your symptoms in more detail?\nFor example: *'chest pain since 1 hour'* or *'fever with headache'*.",
-        "I'd like to understand your situation better. Which part of your body is bothering you, and how severe is it (1–10)?",
-        "I'm here to help. Can you tell me more — any pain, discomfort, or unusual feeling today?",
-        "Noted. Any associated symptoms like dizziness, nausea, fever, or shortness of breath?",
-      ];
-      botReply = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    // ── 2. Try backend with HYBRID payload ─────
+    let botReply = '';
+    let usedBackend = false;
+
+    try {
+      const currentMessages = [...messages, userMsg];
+      const backendResponse = await backendService.sendMessage(
+        'demo-patient-001',
+        inputText,
+        { rolling_summary: '' },
+        symptomsPayload,         // 🔥 Structured symptoms
+        currentMessages           // 📜 Full conversation log
+      );
+
+      if (backendResponse?.bot_reply && !backendResponse.bot_reply.includes('fallback response')) {
+        botReply = backendResponse.bot_reply;
+        usedBackend = true;
+        setBackendOnline(true);
+        console.log('✅ Backend replied with Groq-powered response');
+      }
+    } catch (e) {
+      console.log('⚠️ Backend unavailable, using local NLP fallback');
     }
 
-    // ── 3. Display reply ───────────────────────
-    await new Promise(r => setTimeout(r, 750));
+    // ── 3. Local NLP fallback reply ─────────────
+    if (!usedBackend) {
+      setBackendOnline(false);
+      const sym  = extracted.symptom;
+      const zone = extracted.body_zone;
+      const sev  = extracted.severity ?? 5;
+
+      if (critical) {
+        const zone2label: Record<string,string> = {
+          chest:'CARDIAC', lungs:'RESPIRATORY', systemic:'NEUROLOGICAL'
+        };
+        const label = zone ? (zone2label[zone] ?? 'CRITICAL') : 'CRITICAL';
+        botReply =
+          `🚨 *${label} EMERGENCY DETECTED*\n\n` +
+          `Symptom: *${sym ?? inputText}* — Severity ${sev}/10\n\n` +
+          `⚡ Emergency Risk Agent is now activating...\n` +
+          `Your profile (HTN + Diabetes + Cardiac Hx) makes this a *HIGH-PRIORITY* situation.\n\n` +
+          `Please sit down and do NOT exert yourself. Call *112* if symptoms worsen.`;
+      } else if (sym) {
+        const advice: Record<string,string> = {
+          chest:   'Sit and rest immediately. Avoid any exertion.',
+          lungs:   'Breathe slowly and calmly. Try steam inhalation.',
+          head:    'Rest in a dark, quiet room. Drink water.',
+          systemic:'Rest and stay hydrated. Monitor temperature.',
+          stomach: 'Eat light meals. Avoid spicy or oily food.',
+          back:    'Avoid heavy lifting. Apply a warm compress.',
+          legs:    'Elevate your legs. Monitor for swelling.',
+        };
+        const tip = zone ? (advice[zone] ?? 'Monitor closely and consult your doctor.') : 'Monitor closely.';
+        botReply =
+          `I've detected: *${sym}*\n` +
+          `Severity: ${sev}/10 | Zone: ${zone}\n\n` +
+          `${tip}\n\n` +
+          `How long have you had this? Are there any other symptoms alongside?`;
+      } else {
+        const fallbacks = [
+          "Could you describe your symptoms in more detail?\nFor example: *'chest pain since 1 hour'* or *'fever with headache'*.",
+          "I'd like to understand your situation better. Which part of your body is bothering you, and how severe is it (1–10)?",
+          "I'm here to help. Can you tell me more — any pain, discomfort, or unusual feeling today?",
+          "Noted. Any associated symptoms like dizziness, nausea, fever, or shortness of breath?",
+        ];
+        botReply = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      }
+    }
+
+    // ── 4. Display reply ───────────────────────
+    await new Promise(r => setTimeout(r, usedBackend ? 200 : 750));
     push({ id:`a-${Date.now()}`, role:'assistant', content: botReply });
     setIsLoading(false);
 
-    // ── 4. Accumulate symptoms for agent ───────
+    // ── 5. Accumulate symptoms for agent ───────
     let updatedSymptoms = [...sessionSymptoms];
     if (extracted.has_symptom) {
       const dupe = updatedSymptoms.find(x => x.symptom === extracted.symptom);
@@ -388,8 +417,7 @@ export default function AIBotScreen() {
       setSessionSymptoms(updatedSymptoms);
     }
 
-    // ── 5. ALWAYS run the full agent pipeline ──
-    //    Even "hello" gets risk score 82+ and fires alert
+    // ── 6. Run full agent pipeline ──────────────
     await new Promise(r => setTimeout(r, 450));
     const agentSymptoms = updatedSymptoms.length > 0
       ? updatedSymptoms
@@ -400,9 +428,9 @@ export default function AIBotScreen() {
           severity: 6,
           confidence: 65,
         }];
-    await runOrchestration(agentSymptoms, false);
+    await runOrchestration(agentSymptoms, usedBackend);
 
-  }, [text, isLoading, agentRunning, sessionSymptoms, push, runOrchestration]);
+  }, [text, isLoading, agentRunning, messages, sessionSymptoms, push, runOrchestration]);
 
   // ─────────────────────────────────────────────
   //  RENDER

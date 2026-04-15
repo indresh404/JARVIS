@@ -11,9 +11,13 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 @router.post("/message", response_model=ChatResponse)
 async def chat_message(data: ChatMessageInput):
     """
-    POST /chat/message - Handles patient messages with demo mode support
+    POST /chat/message — Hybrid Architecture
+    
+    🔥 Priority: Use frontend-extracted symptoms DIRECTLY
+    🔄 Fallback: Run Groq NLP extraction only if no symptoms sent
     """
     print(f"📨 Received message from {data.patient_id}: {data.message}")
+    print(f"🧠 Frontend symptoms received: {len(data.symptoms)} | Conversation log: {len(data.conversation_log)} msgs")
 
     # Persistence attempt (User Message)
     try:
@@ -21,25 +25,75 @@ async def chat_message(data: ChatMessageInput):
     except Exception as e:
         print(f"⚠️ Persistence skipped (User): {e}")
 
-    # Build context
-    context_str = f"Rolling Summary: {data.patient_context.rolling_summary}\nProfile: {data.patient_context.profile_summary}"
+    # ─────────────────────────────────────────────
+    # STEP 1: Build rich context from ALL 3 sources
+    # ─────────────────────────────────────────────
+    context_parts = []  # ✅ FIXED: Initialize the list
+    
+    # Source A: Rolling summary
+    if data.patient_context.rolling_summary:
+        context_parts.append(f"Rolling Summary: {data.patient_context.rolling_summary}")
+    
+    # Source B: Profile
+    if data.patient_context.profile_summary:
+        context_parts.append(f"Profile: {data.patient_context.profile_summary}")
+    
+    # Source C: Conversation log (last 10 messages for context window)
+    if data.conversation_log:
+        recent = data.conversation_log[-10:]
+        conv_str = "\n".join([f"{m.get('role','user')}: {m.get('content','')}" for m in recent])
+        context_parts.append(f"Recent Conversation:\n{conv_str}")
+    
+    # Source D: Frontend-extracted symptoms (structured clinical signals)
+    if data.symptoms:
+        sym_str = ", ".join([f"{s.symptom} (zone={s.body_zone}, severity={s.severity}/10, confidence={s.confidence}%)" for s in data.symptoms if s.has_symptom])
+        if sym_str:
+            context_parts.append(f"On-Device Extracted Symptoms: {sym_str}")
+    
+    context_str = "\n".join(context_parts) if context_parts else "New patient conversation"
 
-    # Call AI for reply and extraction
+    # ─────────────────────────────────────────────
+    # STEP 2: AI Reply (Conversational)
+    # ─────────────────────────────────────────────
     try:
-        # 1. AI Reply (Conversational, NOT JSON)
         bot_reply = await call_groq(
             CHAT_SYSTEM_PROMPT,
             f"Context: {context_str}\nPatient: {data.message}\n\nRespond helpfully as a health assistant.",
             json_mode=False
         )
-
-        # Check if Groq returned an internal error message
         if bot_reply.startswith('{"error":'):
             error_data = json.loads(bot_reply)
-            print(f"❌ Groq internal error found in reply: {error_data}")
+            print(f"❌ Groq internal error: {error_data}")
             bot_reply = "I understand. Could you tell me more about your symptoms?"
+    except Exception as e:
+        print(f"❌ AI Reply Error: {e}")
+        bot_reply = "I understand you're sharing health information. Could you tell me more about your symptoms?"
 
-        # 2. Symptom Extraction (JSON Mode)
+    # ─────────────────────────────────────────────
+    # STEP 3: HYBRID SYMPTOM EXTRACTION
+    #   🔥 Priority: Frontend-extracted symptoms
+    #   🔄 Fallback: Groq NLP extraction
+    # ─────────────────────────────────────────────
+    extraction = SymptomExtraction(has_symptom=False)
+    
+    if data.symptoms and any(s.has_symptom for s in data.symptoms):
+        # ✅ USE FRONTEND SYMPTOMS DIRECTLY — no NLP needed
+        best = max([s for s in data.symptoms if s.has_symptom], key=lambda s: s.confidence or 0)
+        print(f"✅ Using frontend-extracted symptom: {best.symptom} (confidence={best.confidence}%)")
+        extraction = SymptomExtraction(
+            has_symptom=True,
+            symptom=best.symptom,
+            body_zone=best.body_zone,
+            severity=best.severity,
+            confidence=best.confidence or 80,
+            duration=best.duration,
+            save_ready=(best.confidence or 0) >= 70 and (best.severity or 0) < 7,
+            clarification_needed=(best.confidence or 0) < 70,
+            confirmation_required=(best.severity or 0) >= 7,
+        )
+    else:
+        # 🔄 FALLBACK: Run Groq NLP extraction
+        print("🔄 No frontend symptoms — running Groq NLP extraction as fallback...")
         try:
             extraction_json = await call_groq(
                 SYMPTOM_EXTRACTION_PROMPT,
@@ -48,18 +102,17 @@ async def chat_message(data: ChatMessageInput):
             )
             extraction_data = json.loads(extraction_json)
             if "error" in extraction_data:
-                 raise ValueError(extraction_data["error"])
+                raise ValueError(extraction_data["error"])
             extraction = SymptomExtraction(**extraction_data)
+            print(f"🔄 Groq extracted: {extraction.symptom} (confidence={extraction.confidence}%)")
         except Exception as e:
-            print(f"⚠️ Symptom extraction skipped/failed: {e}")
+            print(f"⚠️ Groq extraction also failed: {e}")
             extraction = SymptomExtraction(has_symptom=False)
 
-    except Exception as e:
-        print(f"❌ AI Core Error: {e}")
-        bot_reply = "I understand you're sharing health information. Could you tell me more about your symptoms?"
-        extraction = SymptomExtraction(has_symptom=False)
-
-    # Persistence attempt (Bot Reply)
+    # ─────────────────────────────────────────────
+    # STEP 4: Persistence & flags
+    # ─────────────────────────────────────────────
+    # Persist bot reply
     try:
         SupabaseService.save_message(data.patient_id, data.session_id, "assistant", bot_reply)
     except Exception as e:
@@ -69,19 +122,19 @@ async def chat_message(data: ChatMessageInput):
     save_ready = False
     confirmation_required = False
 
-    if extraction:
-        # RULE 7 — SYMPTOM CONFIDENCE THRESHOLD
+    if extraction and extraction.has_symptom:
         if extraction.confidence < 70:
             clarification_needed = True
         elif extraction.severity is not None and extraction.severity >= 7:
             confirmation_required = True
         elif extraction.confidence >= 70:
             save_ready = True
-            # Persist Symptom if ready
             try:
                 SupabaseService.save_symptom(data.patient_id, data.session_id, extraction.model_dump())
             except Exception as e:
                 print(f"⚠️ Symptom persistence skipped: {e}")
+
+    print(f"📊 Final: symptom={extraction.symptom}, confidence={extraction.confidence}, save_ready={save_ready}")
 
     return ChatResponse(
         bot_reply=bot_reply,

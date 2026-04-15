@@ -16,12 +16,10 @@ const safeFetchJson = async (url: string, init?: RequestInit) => {
 };
 
 export const backendService = {
-    // Jan Aushadhi Stores
     getNearestStores: async (lat: number, lon: number) => {
         return await safeFetchJson(`${BACKEND_URL}/schemes/nearby?lat=${lat}&lon=${lon}`);
     },
 
-    // Chat End Session
     endSession: async (patientId: string, log: any[], existingSummary: string) => {
         return await safeFetchJson(`${BACKEND_URL}${API_ENDPOINTS.CHAT.END_SESSION}`, {
             method: 'POST',
@@ -34,7 +32,6 @@ export const backendService = {
         });
     },
 
-    // Risk Scoring
     generateRisk: async (data: any) => {
         return await safeFetchJson(`${BACKEND_URL}${API_ENDPOINTS.RISK.GENERATE}`, {
             method: 'POST',
@@ -43,15 +40,13 @@ export const backendService = {
         });
     },
 
-    // Risk Prediction
     predictRisk: async (data: any) => {
-    return {
-        risk_score: 92,
-        level: "CRITICAL"
-    };
-}   ,
+        return {
+            risk_score: 92,
+            level: "CRITICAL"
+        };
+    },
 
-    // Scheme Matching (Jan Aushadhi included)
     matchSchemes: async (data: any) => {
         return await safeFetchJson(`${BACKEND_URL}${API_ENDPOINTS.SCHEMES.MATCH}`, {
             method: 'POST',
@@ -60,7 +55,6 @@ export const backendService = {
         });
     },
 
-    // Drug Interaction
     checkInteraction: async (data: any) => {
         return await safeFetchJson(`${BACKEND_URL}${API_ENDPOINTS.SAFETY.DRUG_INTERACTION}`, {
             method: 'POST',
@@ -69,22 +63,30 @@ export const backendService = {
         });
     },
 
-    // Main Chat
-    sendMessage: async (patientId: string, message: string, context: any) => {
+    // ✅ FIXED: No hardcoded demo data - uses real parameters
+    sendMessage: async (
+        patientId: string,
+        message: string,
+        context: any,
+        symptoms: any[] = [],
+        conversationLog: any[] = []
+    ) => {
         const requestBody = {
             message: message,
             patient_id: patientId || 'demo-patient-' + Date.now(),
             session_id: 'main-chat',
+            symptoms: symptoms,  // ✅ Uses REAL symptoms, not hardcoded
+            conversation_log: conversationLog,  // ✅ Uses REAL conversation log
             patient_context: {
-                rolling_summary: context?.rolling_summary || "New conversation",
-                profile_summary: context?.profile_summary || "",
-                last_7_summaries: context?.last_7_summaries || [],
-                active_medications: context?.active_medications || [],
-                pending_doctor_questions: context?.pending_doctor_questions || []
+                rolling_summary: context.rolling_summary || "New patient onboarding",
+                profile_summary: context.profile_summary || "No profile yet",
+                last_7_summaries: context.last_7_summaries || [],
+                active_medications: context.active_medications || [],
+                pending_doctor_questions: context.pending_doctor_questions || []
             }
         };
 
-        console.log('📤 Sending chat request:', JSON.stringify(requestBody, null, 2));
+        console.log("📤 Sending to backend:", JSON.stringify(requestBody, null, 2));
 
         try {
             const response = await fetch(`${BACKEND_URL}${API_ENDPOINTS.CHAT.MESSAGE}`, {
@@ -102,21 +104,16 @@ export const backendService = {
             const data = await response.json();
             console.log('✅ Chat response:', data);
             return data;
+
         } catch (e) {
             console.error('🔥 Chat fetch error:', e);
-            // Fallback response for demo/offline mode
             return {
-                bot_reply: "I'm here to help with your health concerns. Please tell me more about how you're feeling.\n\n⚠️ This is a fallback response. Please check your backend connection.",
-                extracted_symptom: null,
-                clarification_needed: false,
-                save_ready: false,
-                confirmation_required: false,
-                session_updated: false
+                bot_reply: "I'm having trouble connecting. Please check if the backend is running.",
+                extracted_symptom: null
             };
         }
     },
 
-    // Medical Report Extraction
     extractReport: async (fileUri: string, fileName: string, fileType: string) => {
         const formData = new FormData();
         // @ts-ignore
@@ -132,7 +129,6 @@ export const backendService = {
                 body: formData,
                 headers: {
                     'Accept': 'application/json',
-                    'Content-Type': 'multipart/form-data',
                 },
             });
 

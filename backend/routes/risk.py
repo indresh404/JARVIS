@@ -68,47 +68,84 @@ async def generate_risk(data: RiskGenerateInput):
     rag_chunks = retrieve(query, top_k=3, condition_tags=data.conditions)
     guideline_context = "\n".join([f"Source: {c['source']}\nText: {c['text']}" for c in rag_chunks]) if rag_chunks else "No relevant guidelines found."
     
-    # Step 3: RAG Adjustment (Groq)
-    system_prompt = RISK_ADJUSTMENT_PROMPT.format(
-        base_score=base_score,
-        summary=data.summary,
-        guideline_context=guideline_context
-    )
+    # Step 3: Calculate RAG SCORE
+    rag_score = 0
+    ref_text = guideline_context.lower()
+    if "emergency" in ref_text or "immediate" in ref_text or "critical" in ref_text:
+        rag_score = 25
+    elif "urgent" in ref_text or "high risk" in ref_text or "refer" in ref_text:
+        rag_score = 15
+    elif "monitor" in ref_text or "moderate" in ref_text or "elevated" in ref_text:
+        rag_score = 8
+
+    # Step 4: Combine Scores
+    combined_score = min(100, base_score + rag_score)
     
-    try:
-        groq_response = await call_groq(system_prompt, f"Patient Data: {data.model_dump_json()}")
-        adjustment_data = json.loads(groq_response)
-        adjustment = int(adjustment_data.get("adjustment", 0))
-        # Bounded adjustment: -15 to +15
-        adjustment = max(-15, min(15, adjustment))
-        reason = adjustment_data.get("reason", "No adjustment applied.")
-        ref = adjustment_data.get("guideline_reference", "General Guidelines")
-    except Exception as e:
-        adjustment = 0
-        reason = "LLM adjustment unavailable. Fallback to base score."
-        ref = "None"
-        
-    final_score = max(0, min(100, base_score + adjustment))
-    
-    # Step 4: Confidence (Rule 2)
-    # Mocking metadata counts for this demonstration
-    confidence = calculate_confidence(14, 8, 0.9) # Example counts
-    
-    # Determine risk level
-    if final_score >= 86: level = "High"
-    elif final_score >= 71: level = "Elevated"
-    elif final_score >= 41: level = "Moderate"
+    # Determine risk level based on combined score (Matching Frontend rules)
+    if combined_score >= 75: level = "Critical"
+    elif combined_score >= 55: level = "High"
+    elif combined_score >= 35: level = "Moderate"
     else: level = "Low"
-    
+
+    # Step 5: Doctor Agent Trigger (combined >= 55)
+    doctor_agent_log = None
+    if combined_score >= 55:
+        print(f"🚨 Risk level {level} - Activating Doctor Agent...")
+        try:
+            from prompts.risk import DOCTOR_AGENT_PROMPT
+            system_prompt = DOCTOR_AGENT_PROMPT.format(
+                symptoms_list=", ".join(s.symptom_name for s in data.symptoms) or "None reported",
+                combined_score=combined_score,
+                risk_level=level,
+                rag_context=guideline_context
+            )
+            groq_response = await call_groq(system_prompt, "Generate doctor assessment.", json_mode=True)
+            doctor_response_data = json.loads(groq_response)
+            
+            from schemas.models import DoctorAgentResponse
+            doctor_agent_log = DoctorAgentResponse(**doctor_response_data)
+            
+            # Save alert to database & broadcast
+            from services.supabase_service import SupabaseService
+            SupabaseService.create_alert(
+                patient_id=data.patient_id,
+                combined_score=combined_score,
+                risk_level=level,
+                symptoms=data.symptoms,
+                doctor_agent_response=doctor_response_data
+            )
+        except Exception as e:
+            print(f"❌ Doctor Agent Failed: {e}")
+
+    # Confidence (Rule 2)
+    confidence = calculate_confidence(14, 8, 0.9) 
+
+    # Step 6: Save Risk Assessment
+    try:
+        from services.supabase_service import SupabaseService
+        SupabaseService.save_risk_assessment(
+            patient_id=data.patient_id,
+            base_score=base_score,
+            rag_score=rag_score,
+            combined_score=combined_score,
+            risk_level=level,
+            rag_context=guideline_context,
+            symptoms=data.symptoms
+        )
+    except Exception as e:
+        print(f"⚠️ Failed to save risk assessment: {e}")
+
     return RiskScore(
         base_score=base_score,
-        rag_adjustment=adjustment,
-        final_score=final_score,
+        rag_score=rag_score,
+        combined_score=combined_score,
+        rag_context=guideline_context if rag_chunks else "No specific guidelines triggered.",
         risk_level=level,
-        risk_reason=reason,
-        guideline_reference=ref,
+        risk_reason="Calculated from base factors and clinical guidelines.",
+        guideline_reference=rag_chunks[0]['source'] if rag_chunks else "General",
         confidence=confidence,
-        data_points_used=10 # Example
+        data_points_used=10,
+        doctor_agent_log=doctor_agent_log
     )
 
 @router.post("/predict", response_model=HealthPrediction)

@@ -184,3 +184,63 @@ class SupabaseService:
         }
         res = supabase.table("medicines").insert(data).execute()
         return res.data
+
+    @staticmethod
+    def save_risk_assessment(patient_id: str, base_score: int, rag_score: int, combined_score: int, risk_level: str, rag_context: str, symptoms: list):
+        assessment_id = str(uuid.uuid4())
+        data = {
+            "id": assessment_id,
+            "patient_id": patient_id,
+            "base_score": base_score,
+            "rag_score": rag_score,
+            "combined_score": combined_score,
+            "risk_level": risk_level,
+            "rag_context": rag_context,
+            "symptoms": [s.model_dump() for s in symptoms] if hasattr(symptoms[0], 'model_dump') else symptoms,
+            "created_at": datetime.now().isoformat()
+        }
+        if DEMO_MODE or not SupabaseService.is_valid_uuid(patient_id):
+            return data
+
+        try:
+            res = supabase.table("risk_assessments").insert(data).execute()
+            return res.data
+        except Exception as e:
+            print(f"⚠️ Failed to save risk assessment: {e}")
+            return data
+
+    @staticmethod
+    def create_alert(patient_id: str, combined_score: int, risk_level: str, symptoms: list, doctor_agent_response: dict):
+        alert_id = str(uuid.uuid4())
+        symptoms_data = [s.model_dump() for s in symptoms] if hasattr(symptoms[0], 'model_dump') else symptoms
+        
+        data = {
+            "id": alert_id,
+            "patient_id": patient_id,
+            "alert_type": f"{risk_level.upper()}_RISK",
+            "message": doctor_agent_response.get("alert", "Urgent medical attention required."),
+            "risk_score": combined_score,
+            "symptoms": symptoms_data,
+            "status": "PENDING",
+            "doctor_response": None,
+            "created_at": datetime.now().isoformat()
+        }
+        
+        # Log to console with visual separator (per requirements)
+        print("\n" + "="*70)
+        print("🚨🚨🚨 CRITICAL ALERT - DOCTOR AGENT TRIGGERED 🚨🚨🚨")
+        print(f"Patient: {patient_id}")
+        print(f"Risk Score: {combined_score} ({risk_level})")
+        print(f"Symptoms: {symptoms_data}")
+        print(f"Alert: {data['message']}")
+        print("="*70 + "\n")
+
+        if DEMO_MODE or not SupabaseService.is_valid_uuid(patient_id):
+            return data
+            
+        try:
+            res = supabase.table("alerts").insert(data).execute()
+            return res.data
+        except Exception as e:
+            print(f"⚠️ Failed to create alert: {e}")
+            return data

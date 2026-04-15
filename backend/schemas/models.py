@@ -101,15 +101,24 @@ class RiskGenerateInput(BaseModel):
     wearable_flags: List[str]
     age: int
 
+class DoctorAgentResponse(BaseModel):
+    assessment: str
+    red_flags: List[str]
+    timeline: str
+    alert: str
+    doctor_log: List[str]
+
 class RiskScore(BaseModel):
     base_score: int
-    rag_adjustment: int
-    final_score: int
-    risk_level: Literal["Low", "Moderate", "Elevated", "High"]
+    rag_score: int
+    combined_score: int
+    rag_context: str
+    risk_level: Literal["Low", "Moderate", "Elevated", "High", "Critical"]
     risk_reason: str
     guideline_reference: str
     confidence: int
     data_points_used: int
+    doctor_agent_log: Optional[DoctorAgentResponse] = None
 
 class RiskPredictInput(BaseModel):
     patient_id: str

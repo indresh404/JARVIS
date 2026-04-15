@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
  * - localhost or 127.0.0.1 works for iOS Simulator.
  * - Use your machine's LOCAL IP (e.g., 192.168.1.33) if testing on a PHYSICAL device.
  */
-const PHYSICAL_DEVICE_IP = '192.168.1.33'; // Discovered active local IP
+const PHYSICAL_DEVICE_IP = '172.20.63.69'; // Discovered active local IP
 const EMULATOR_IP = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
 
 // CHANGE THIS TO TRUE IF TESTING ON A REAL PHONE

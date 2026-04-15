@@ -233,16 +233,18 @@ const PredictionCard = () => {
   );
 };
 
-// Watch Simulator Card Component
-const WatchSimulatorCard = ({ isAbnormal, setIsAbnormal }: { isAbnormal: boolean; setIsAbnormal: React.Dispatch<React.SetStateAction<boolean>> }) => {
+// Watch Simulator Card Component — owns its own isAbnormal state to avoid setState-during-render
+const WatchSimulatorCard = ({ onAbnormalChange }: { onAbnormalChange?: (val: boolean) => void }) => {
+  const [isAbnormal, setIsAbnormalLocal] = useState(false);
   const [vitals, setVitals] = useState({ hr: 72, spo2: 98, sys: 120, dia: 80 });
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setIsAbnormal((prev: boolean) => {
+      setIsAbnormalLocal(prev => {
         const next = !prev;
+        // Notify parent via callback (safe, outside render)
+        if (onAbnormalChange) onAbnormalChange(next);
         if (next) {
-          // Abnormal state
           setVitals({
             hr: Math.floor(Math.random() * (140 - 120) + 120),
             spo2: Math.floor(Math.random() * (92 - 85) + 85),
@@ -250,7 +252,6 @@ const WatchSimulatorCard = ({ isAbnormal, setIsAbnormal }: { isAbnormal: boolean
             dia: Math.floor(Math.random() * (100 - 90) + 90),
           });
         } else {
-          // Normal state
           setVitals({
             hr: Math.floor(Math.random() * (85 - 65) + 65),
             spo2: Math.floor(Math.random() * (100 - 96) + 96),
@@ -260,7 +261,7 @@ const WatchSimulatorCard = ({ isAbnormal, setIsAbnormal }: { isAbnormal: boolean
         }
         return next;
       });
-    }, 3500); // toggle every 3.5 seconds
+    }, 3500);
 
     return () => clearInterval(interval);
   }, []);
@@ -338,11 +339,11 @@ const RiskScoreCard = ({ profile, isAbnormal }: { profile: any; isAbnormal: bool
     if (isAbnormal) {
       return { score: 92, color: '#EF4444', label: 'Critical' };
     }
-    const level = profile?.risk_level?.toLowerCase() || 'low';
+    const level = profile?.risk_level?.toLowerCase() || 'moderate';
     if (level === 'high' || level === 'red') return { score: 85, color: '#EF4444', label: 'High' };
     if (level === 'elevated' || level === 'orange') return { score: 65, color: '#F97316', label: 'Elevated' };
-    if (level === 'moderate' || level === 'yellow') return { score: 45, color: '#F59E0B', label: 'Medium' };
-    return { score: 15, color: '#10B981', label: 'Low' };
+    if (level === 'low' || level === 'green') return { score: 15, color: '#10B981', label: 'Low' };
+    return { score: 45, color: '#F59E0B', label: 'Moderate' };
   };
 
   const { score, color, label } = getRiskDetails();
@@ -666,7 +667,7 @@ export default function HomeScreen() {
                 <FamilySummaryCard />
 
                 {/* Smartwatch Simulator Area */}
-                <WatchSimulatorCard isAbnormal={isAbnormal} setIsAbnormal={setIsAbnormal} />
+                <WatchSimulatorCard onAbnormalChange={setIsAbnormal} />
 
                 {/* Health Risk Score Area */}
                 <RiskScoreCard profile={profile} isAbnormal={isAbnormal} />

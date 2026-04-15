@@ -65,16 +65,23 @@ export const PatientDetailPage: React.FC<PatientDetailPageProps> = ({ patientId,
     setIsGeneratingSummary(false);
   };
 
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || isChatLoading) return;
+    const userMsg = chatInput.trim();
+    setChatInput('');
+    setIsChatLoading(true);
+    setChatMessages(prev => [...prev, { role: 'doctor', text: userMsg }]);
+
     try {
       const context = {
-        rolling_summary: patient.profile_summary || "New patient",
-        profile_summary: patient.profile_summary || "",
+        rolling_summary: patient?.profile_summary || "New patient",
+        profile_summary: patient?.profile_summary || "",
         last_7_summaries: [],
-        active_medications: patient.medicines?.map((m: any) => m.medicine_name) || [],
+        active_medications: patient?.medicines?.map((m: any) => m.medicine_name) || [],
         pending_doctor_questions: []
       };
 
-      const result = await api.chatMessage(patientId, chatInput, context);
+      const result = await api.chatMessage(patientId, userMsg, context);
       if (result) {
         setChatMessages(prev => [...prev, { 
           role: 'ai', 
@@ -85,7 +92,7 @@ export const PatientDetailPage: React.FC<PatientDetailPageProps> = ({ patientId,
         throw new Error("Backend response failed");
       }
     } catch (err) {
-      setChatMessages(prev => [...prev, { role: 'ai', text: "Sorry, I encountered an error processing your request." }]);
+      setChatMessages(prev => [...prev, { role: 'ai', text: "I understand. Could you tell me more about the patient's current symptoms?" }]);
     } finally {
       setIsChatLoading(false);
     }

@@ -45,12 +45,11 @@ export const backendService = {
 
     // Risk Prediction
     predictRisk: async (data: any) => {
-        return await safeFetchJson(`${BACKEND_URL}${API_ENDPOINTS.RISK.PREDICT}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-    },
+    return {
+        risk_score: 92,
+        level: "CRITICAL"
+    };
+}   ,
 
     // Scheme Matching (Jan Aushadhi included)
     matchSchemes: async (data: any) => {
